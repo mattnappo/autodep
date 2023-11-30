@@ -27,8 +27,7 @@ async fn main() {
     let mut manager = manager::Manager::new(model);
 
     // Allocate two workers
-    manager.start_new_worker().await.unwrap();
-    manager.start_new_worker().await.unwrap();
+    manager.start_new_workers(10).await.unwrap();
 
     // Get the statuses of all workers
     debug!("calling status");

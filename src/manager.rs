@@ -71,7 +71,7 @@ impl Manager {
         let pid = Command::new(WORKER_BINARY).args(args).spawn().unwrap().id();
 
         // Wait for the local process to start
-        std::thread::sleep(time::Duration::from_millis(5000));
+        std::thread::sleep(time::Duration::from_millis(1000));
 
         // Connect to the new local worker
         let client = WorkerClient::connect(format!("http://[::1]:{port}")).await?;
@@ -91,12 +91,22 @@ impl Manager {
         Ok(())
     }
 
+    /// Start a new worker process on the local machine and connect to it
+    pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
+        let mut stream = tokio_stream::iter(0..n);
+        while let Some(_) = stream.next().await {
+            self.start_new_worker().await?;
+        }
+        Ok(())
+    }
+
     /// Get the statuses of all workers
     pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         //let conns = self.workers.iter().map(|w| w.conn).filter(|w| w.is_some());
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
 
-        while let Some(handle) = tokio_stream::iter(&self.workers).next().await {
+        let mut stream = tokio_stream::iter(&self.workers);
+        while let Some(handle) = stream.next().await {
             debug!("getting status of worker pid {}", handle.pid);
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
