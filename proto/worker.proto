@@ -1,0 +1,39 @@
+syntax = "proto3";
+package worker;
+
+message Empty {}
+
+enum StatusCode {
+    Working = 0;
+    Idle = 1;
+    ShuttingDown = 2;
+    Error = 3;
+}
+
+message Status {
+    StatusCode status = 1;
+}
+
+message ImageInput {
+    bytes image = 1;
+    uint32 height = 2;
+    uint32 width = 3;
+}
+
+message Classification {
+    double probability = 1;
+    string label = 2;
+    int32 class_int = 3;
+}
+
+message ClassOutput {
+    repeated Classification classes = 1;
+    uint32 num_classes = 2;
+}
+
+service Worker {
+    rpc ImageInference(ImageInput) returns (ClassOutput) {}
+    //rpc InferenceText(Input) returns (Output) {}
+    rpc GetStatus(Empty) returns (Status) {}
+    rpc Shutdown(Empty) returns (Empty) {}
+}

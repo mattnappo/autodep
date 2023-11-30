@@ -9,7 +9,7 @@ path = "src/main.rs"
 name = "autodep"
 
 [[bin]]
-path = "src/worker.rs"
+path = "src/worker_runner.rs"
 name = "worker"
 
 [lib]
@@ -19,3 +19,13 @@ path = "src/lib.rs"
 env_logger = "0.10.1"
 anyhow = "1.0.75"
 tch = { version = "0.14.0", features = [ "download-libtorch" ] }
+
+tonic = "0.10"
+prost = "0.12"
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.7"
+
+[build-dependencies]
+tonic-build = "0.10"

@@ -1,20 +1,20 @@
 # autodep
 Distributed and automatic ML model deployment at scale
 
-## Requirements
-- `libtorch` version 2.1.0
-
 ## Todo
 - [ ] Make and train a few small models in pytorch
-- [ ] Pytorch loading
-    - [ ] Lib Func to load torchscript
-    - [ ] Lib Func to run
+    - [x] resnet
+    - [ ] transformer
+- [x] Pytorch loading
+    - [x] Lib Func to load torchscript
+    - [x] Lib Func to run
 - [ ] Worker code
     - [ ] On init:
         - [ ] load pytorch model
         - [ ] start RPC server listening for requests
     - [ ] Creates RPC server that listens for requests to:
         - [ ] Run Inference on some input (input needs to be serialized as RPC)
+        - [ ] return its status
         - [ ] "Gracefully" be shut down
     - [ ] On inference handler:
         - [ ] Run inference on the model
@@ -49,5 +49,10 @@ Distributed and automatic ML model deployment at scale
 
 ## Future Improvements
 - [ ] Support more input datatypes
-- [ ] Make `TorchLoader` more robust (make input type declared when `new` is  called)
+- [ ] Make `TorchModel` more robust (make input type declared when `new` is called)
 - [ ] Explicit CPU/GPU support
+- [ ] Don't hardcode for resnet
+- [ ] Make `Class` require one or the other option
+- [ ] Make `TOP_N` an HTTP API parameter
+- [ ] Add stats to `Worker`
+- [ ] AWS (S3) input/output support
