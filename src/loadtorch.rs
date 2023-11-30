@@ -1,8 +1,9 @@
 /// Code for loading and running (trained) PyTorch models
 use anyhow::Result;
+use tch::vision::imagenet;
 
 /// An image: input or output of a model
-struct Image {
+pub struct Image {
     image: Vec<u8>,
     height: u32,
     width: u32,
@@ -39,7 +40,7 @@ pub struct TorchLoader {
 impl TorchLoader {
     pub fn new(filename: String) -> Result<Self> {
         Ok(TorchLoader {
-            filename,
+            filename: filename.clone(),
             model: tch::CModule::load(filename)?,
         })
     }
@@ -49,8 +50,11 @@ impl TorchLoader {
         match input {
             InputData::Text(_) => todo!(),
             InputData::Image(path) => {
-                let image = imagenet::load_image_and_resize(path)?;
-                let output = self.model.forward_ts(&[image.unsqueeze(0)])?.softmax(-1);
+                let image = imagenet::load_image_and_resize(path, 224, 224)?;
+                let output = self
+                    .model
+                    .forward_ts(&[image.unsqueeze(0)])?
+                    .softmax(-1, Some(tch::kind::Kind::Float));
                 for (probability, class) in imagenet::top(&output, 5).iter() {
                     println!("{:50} {:5.2}%", class, 100.0 * probability)
                 }
@@ -60,12 +64,15 @@ impl TorchLoader {
     }
 }
 
-#[cgf(tests)]
+#[cfg(test)]
 mod tests {
+    use super::*;
     #[test]
     fn test_load() {
         println!("hello");
-        let loader = TorchLoader("models/resnet18.pt").unwrap();
-        loader.run(InputData::Image("images/cat.png")).unwrap();
+        let loader = TorchLoader::new("models/resnet18.pt".into()).unwrap();
+        loader
+            .run(InputData::Image("images/cat.png".into()))
+            .unwrap();
     }
 }

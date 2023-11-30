@@ -1,6 +1,9 @@
 # autodep
 Distributed and automatic ML model deployment at scale
 
+## Requirements
+- `libtorch` version 2.1.0
+
 ## Todo
 - [ ] Make and train a few small models in pytorch
 - [ ] Pytorch loading
@@ -47,3 +50,4 @@ Distributed and automatic ML model deployment at scale
 ## Future Improvements
 - [ ] Support more input datatypes
 - [ ] Make `TorchLoader` more robust (make input type declared when `new` is  called)
+- [ ] Explicit CPU/GPU support

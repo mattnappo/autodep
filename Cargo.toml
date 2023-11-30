@@ -18,4 +18,4 @@ path = "src/lib.rs"
 [dependencies]
 env_logger = "0.10.1"
 anyhow = "1.0.75"
-tch = "0.14.0"
+tch = { version = "0.14.0", features = [ "download-libtorch" ] }
