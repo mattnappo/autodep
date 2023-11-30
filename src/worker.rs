@@ -1,27 +1,21 @@
-/// An inference worker listens for requests and computes model inference in
-/// an isolated environment
+//! An inference worker listens for requests from the `Manager` and computes
+//! model inference in an isolated environment
+
+use crate::rpc::worker_server::{self, WorkerServer};
+use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
 use crate::torch;
 use anyhow::Result;
-use rpc::worker_server;
-use rpc::{ClassOutput, Empty, ImageInput, Status};
 use std::sync::Mutex;
-
-use std::pin::Pin;
-use std::sync::Arc;
-use tokio::sync::mpsc;
+use tonic::transport::Server;
 use tonic::{Request, Response};
 
 type TResult<T> = Result<T, tonic::Status>;
-
-pub mod rpc {
-    tonic::include_proto!("worker");
-}
 
 /// The current status of a worker
 #[derive(Debug, Clone)]
 pub enum WorkerStatus {
     /// Currently computing inference
-    Working,
+    Working = 0,
 
     /// Not computing inference
     Idle,
@@ -40,19 +34,25 @@ pub enum WorkerStatus {
 pub struct Worker {
     model: torch::TorchModel,
     status: Mutex<WorkerStatus>,
-    // TODO stats
+    port: u16,
 }
 
 impl Worker {
-    pub fn new(model_filename: String) -> Result<Self> {
+    pub fn new(model_filename: String, port: u16) -> Result<Self> {
         Ok(Worker {
             model: torch::TorchModel::new(model_filename)?,
             status: Mutex::new(WorkerStatus::Idle),
+            port,
         })
     }
 
     /// Start listening for requests
-    pub fn start(&self) {}
+    pub async fn start(self) -> Result<()> {
+        let addr = format!("[::1]:{}", self.port).parse().unwrap();
+        let svc = WorkerServer::new(self);
+        Server::builder().add_service(svc).serve(addr).await?;
+        Ok(())
+    }
 
     /// Return the worker's status
     pub fn status(&self) -> WorkerStatus {
@@ -70,15 +70,16 @@ impl Worker {
 
 #[tonic::async_trait]
 impl worker_server::Worker for Worker {
-    async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
-        unimplemented!()
-    }
-
     async fn image_inference(
         &self,
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
         unimplemented!()
+    }
+
+    async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
+        let status = self.status() as i32;
+        Ok(Response::new(Status { status }))
     }
 
     async fn shutdown(&self, _request: Request<Empty>) -> TResult<Response<Empty>> {

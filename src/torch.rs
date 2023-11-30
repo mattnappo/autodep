@@ -1,4 +1,5 @@
-/// Code for loading and running (trained) PyTorch models
+//! Code for loading and running (trained) PyTorch models
+
 use anyhow::Result;
 use tch::vision::imagenet;
 

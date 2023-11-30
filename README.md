@@ -56,3 +56,5 @@ Distributed and automatic ML model deployment at scale
 - [ ] Make `TOP_N` an HTTP API parameter
 - [ ] Add stats to `Worker`
 - [ ] AWS (S3) input/output support
+- [ ] Make `TResult` cleaner type alias
+- [ ] Allow for `Worker`s on different hosts
