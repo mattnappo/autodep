@@ -1,0 +1,19 @@
+[package]
+name = "autodep"
+version = "0.1.0"
+edition = "2021"
+
+
+[[bin]]
+path = "src/main.rs"
+name = "autodep"
+
+[[bin]]
+path = "src/worker.rs"
+name = "worker"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+env_logger = "0.10.1"
