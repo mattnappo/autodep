@@ -1,5 +1,7 @@
+use anyhow::Result;
 use autodep::manager;
 use autodep::util::init_libtorch;
+use autodep::util::test;
 use env_logger;
 use log::{debug, info, warn};
 use std::{env, process};
@@ -17,7 +19,7 @@ fn pause() {
 
 /// This is test code right now
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     init_libtorch();
     env_logger::init();
 
@@ -37,12 +39,21 @@ async fn main() {
     let mut manager = manager::Manager::new(model);
 
     // Allocate two workers
-    manager.start_new_workers(2).await.unwrap();
+    manager.start_new_workers(2).await?;
 
     pause();
 
+    //let killed = manager.kill_worker().await?;
+    //debug!("KILLED {killed:#?}");
+
     // Get the statuses of all workers
     debug!("calling status");
-    let status = manager.all_status().await.unwrap();
+    let status = manager.all_status().await?;
     info!("worker statuses: {:#?}", status);
+
+    let img = test::get_test_image();
+    let output = manager.run_inference(img).await?;
+    info!("got output: {:#?}", output);
+
+    Ok(())
 }

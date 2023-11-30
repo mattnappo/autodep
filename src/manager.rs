@@ -4,12 +4,14 @@
 
 use crate::config::{self, WORKER_BINARY};
 use crate::rpc::{self, worker_client::WorkerClient};
+use crate::torch::Inference;
+use crate::torch::InputData;
 use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
 use log::{debug, info};
-use nix::sys::signal;
+use nix::{sys::signal, unistd};
 use std::collections::HashMap;
 use std::process::Command;
 use std::{thread, time};
@@ -112,22 +114,6 @@ impl Manager {
         Ok(())
     }
 
-    /// Get the statuses of all workers
-    pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
-        let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
-
-        let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
-        while let Some(handle) = handles.next().await {
-            debug!("getting status of worker pid {}", handle.pid);
-            let conn = handle.conn.clone();
-            let req = Request::new(rpc::Empty {});
-            let res = conn.unwrap().get_status(req).await?.into_inner();
-            map.insert(handle.clone(), res.into());
-        }
-
-        Ok(map)
-    }
-
     /// Find an idle worker
     async fn find_idle_worker(&self) -> Result<Handle> {
         let mut handles = tokio_stream::iter(self.workers.values());
@@ -143,12 +129,47 @@ impl Manager {
         Err(anyhow!("no idle workers found"))
     }
 
+    // ----- Interface ----- //
+
     /// Kill an idle worker and return a partial handle to it
-    pub(crate) async fn kill_worker(&mut self) -> Result<Handle> {
+    pub async fn kill_worker(&mut self) -> Result<Handle> {
+        // Find an idle worker
         let pid = self.find_idle_worker().await?.pid;
+        // Remove it from the worker store
         let handle = self.workers.remove(&pid).unwrap();
-        signal::kill(pid.into(), signal::Signal::SIGTERM).unwrap();
+        // Kill the process
+        signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
         Ok(handle)
+    }
+
+    /// Run inference on an idle worker
+    pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
+        // Find an idle worker
+        let handle = self.find_idle_worker().await?;
+        match handle.conn {
+            Some(mut conn) => {
+                let req = Request::new(input.into());
+                let res = conn.image_inference(req).await?.into_inner().into();
+                Ok(res)
+            }
+            None => todo!(), // Try to connect again
+        }
+    }
+
+    /// Get the statuses of all workers
+    pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
+        let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
+
+        let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
+        while let Some(handle) = handles.next().await {
+            debug!("getting status of worker pid {}", handle.pid);
+            let conn = handle.conn.clone();
+            let req = Request::new(rpc::Empty {});
+            let res = conn.unwrap().get_status(req).await?.into_inner();
+            map.insert(handle.clone(), res.into());
+        }
+
+        Ok(map)
     }
 
     /// A testing function -- ignore

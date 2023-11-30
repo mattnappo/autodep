@@ -4,6 +4,7 @@
 use crate::rpc::worker_server::{self, WorkerServer};
 use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
 use crate::torch;
+use anyhow::anyhow;
 use anyhow::Result;
 use log::{debug, info};
 use std::sync::Mutex;
@@ -77,7 +78,7 @@ impl Worker {
     }
 
     /// Run inference on the worker
-    pub fn run(&self, input: torch::InputData) -> Result<torch::OutputData> {
+    pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
         self.model.run(input)
     }
 
@@ -92,7 +93,11 @@ impl worker_server::Worker for Worker {
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
         info!("got inference request");
-        unimplemented!()
+        let image: torch::InputData = _request.into_inner().into();
+        debug!("image input: {:#?}", image);
+
+        let output = self.run(image).unwrap();
+        return Ok(Response::new(output.into()));
     }
 
     async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {

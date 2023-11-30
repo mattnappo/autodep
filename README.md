@@ -48,6 +48,7 @@ Distributed and automatic ML model deployment at scale
 [Source](https://github.com/LaurentMazare/tch-rs/blob/main/examples/jit/README.md)
 
 ## Future Improvements
+- [ ] All `todo!()` and `TODO` code
 - [ ] Support more input datatypes
 - [ ] Make `TorchModel` more robust (make input type declared when `new` is called)
 - [ ] Explicit CPU/GPU support
@@ -63,3 +64,4 @@ Distributed and automatic ML model deployment at scale
     - [ ] Idea: have a timeout mechanism?
 - [ ] Run new `./worker` processes procs without cargo
 - [ ] Fix the jank in `all_status`
+- [ ] Make `class_int` optional in the protobuf

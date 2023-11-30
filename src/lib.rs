@@ -12,6 +12,7 @@ pub mod rpc {
 pub mod config {
     /// Path to the local libtorch installation
     pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-ff2ab40729eb7ad5/out/libtorch/libtorch/lib";
+    //"/home/matt/autodep/target/debug/build/torch-sys-ff332d9a0497eb5d/out/libtorch/libtorch/lib/";
 
     /// The path to the compiled worker binary
     pub const WORKER_BINARY: &str = "./target/debug/worker";
@@ -78,5 +79,22 @@ pub mod util {
             format!("${}:{}", ld_lib_path, super::config::LIBTORCH_PATH),
         );
         std::env::set_var("RUST_LOG", "debug");
+    }
+
+    /// Functions for testing purposes
+    pub mod test {
+        use std::io::Read;
+        /// Get a test image
+        pub fn get_test_image() -> crate::torch::InputData {
+            let mut file = std::fs::File::open("images/cat.png").unwrap();
+            let mut image: Vec<u8> = vec![];
+            file.read_to_end(&mut image).unwrap();
+
+            crate::torch::InputData::Image(crate::torch::Image {
+                image,
+                height: None,
+                width: None,
+            })
+        }
     }
 }

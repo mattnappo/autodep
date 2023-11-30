@@ -1,15 +1,16 @@
 //! Code for loading and running (trained) PyTorch models
 
 use crate::config::TOP_N;
+use crate::rpc;
 use anyhow::Result;
 use tch::vision::imagenet;
 
 /// An in-memory representation of an image. Can be the input or output of a model
 #[derive(Debug)]
 pub struct Image {
-    image: Vec<u8>,
-    height: Option<u32>,
-    width: Option<u32>,
+    pub(crate) image: Vec<u8>,
+    pub(crate) height: Option<u32>,
+    pub(crate) width: Option<u32>,
 }
 
 /// A class prediction outputted by a classifier model
@@ -20,6 +21,14 @@ pub struct Class {
     label: Option<String>,
 }
 
+/// The output of a model's inference
+#[derive(Debug)]
+pub enum Inference {
+    Text(String),
+    Classes(Vec<Class>),
+    Image(Image),
+}
+
 /// Input data that inference can be computed on
 #[derive(Debug)]
 pub enum InputData {
@@ -28,12 +37,64 @@ pub enum InputData {
     Image(Image),
 }
 
-/// Data that a model inference could return
-#[derive(Debug)]
-pub enum OutputData {
-    Text(String),
-    Classes(Vec<Class>),
-    Image(Image),
+impl From<rpc::ImageInput> for InputData {
+    fn from(img: rpc::ImageInput) -> Self {
+        InputData::Image(Image {
+            image: img.image,
+            height: Some(img.height).filter(|x| *x != 0),
+            width: Some(img.width).filter(|x| *x != 0),
+        })
+    }
+}
+
+impl From<InputData> for rpc::ImageInput {
+    fn from(input: InputData) -> Self {
+        match input {
+            InputData::Image(img) => Self {
+                image: img.image,
+                height: img.height.unwrap_or(0),
+                width: img.width.unwrap_or(0),
+            },
+            InputData::Text(_) => todo!(),
+        }
+    }
+}
+
+impl From<rpc::ClassOutput> for Inference {
+    fn from(data: rpc::ClassOutput) -> Self {
+        Inference::Classes(
+            data.classes
+                .into_iter()
+                .map(|c| Class {
+                    probability: Some(c.probability),
+                    class: Some(c.class_int),
+                    label: Some(c.label).filter(|x| x != ""),
+                })
+                .collect(),
+        )
+    }
+}
+
+impl From<Inference> for rpc::ClassOutput {
+    fn from(data: Inference) -> Self {
+        match data {
+            Inference::Classes(c) => {
+                let classes: Vec<rpc::Classification> = c
+                    .into_iter()
+                    .map(|c| rpc::Classification {
+                        probability: c.probability.unwrap_or(-1.0),
+                        label: c.label.unwrap_or(String::new()),
+                        class_int: c.class.unwrap_or(-1),
+                    })
+                    .collect();
+                rpc::ClassOutput {
+                    num_classes: classes.len() as u32,
+                    classes,
+                }
+            }
+            _ => todo!(),
+        }
+    }
 }
 
 /// Load and run a TorchScript file
@@ -58,7 +119,7 @@ impl TorchModel {
     /// Run inference on the loaded model
     /// Right now this function is not very general, and is somewhat hardcoded
     /// for imagenet. Will circle back later
-    pub fn run(&self, input: InputData) -> Result<OutputData> {
+    pub fn run(&self, input: InputData) -> Result<Inference> {
         match input {
             InputData::Text(_) => todo!(),
             InputData::Image(image) => {
@@ -75,7 +136,7 @@ impl TorchModel {
                         label: Some(l.into()),
                     })
                     .collect();
-                Ok(OutputData::Classes(classes))
+                Ok(Inference::Classes(classes))
             }
         }
     }
@@ -84,6 +145,7 @@ impl TorchModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::test;
     use std::fs;
     use std::io::Read;
 
@@ -91,17 +153,9 @@ mod tests {
     fn test_run() {
         let loader = TorchModel::new("models/resnet18.pt".into()).unwrap();
 
-        let mut file = fs::File::open("images/cat.png").unwrap();
-        let mut image: Vec<u8> = vec![];
-        file.read_to_end(&mut image).unwrap();
+        let img = test::get_test_image();
 
-        let outputs = loader
-            .run(InputData::Image(Image {
-                image,
-                height: None,
-                width: None,
-            }))
-            .unwrap();
+        let outputs = loader.run(img).unwrap();
 
         println!("outputs: {outputs:#?}");
     }
