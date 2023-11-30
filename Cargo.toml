@@ -23,6 +23,7 @@ tch = { version = "0.14.0", features = [ "download-libtorch" ] }
 tonic = "0.10"
 prost = "0.12"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-stream = "0.1.14"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.7"

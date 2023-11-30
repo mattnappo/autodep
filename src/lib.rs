@@ -7,6 +7,18 @@ pub mod rpc {
     tonic::include_proto!("worker");
 }
 
+/// Autodep configuration -- can eventually be lazy_static parsed from a config
+/// file
+pub mod config {
+    /// Path to the local libtorch installation
+    pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-ff2ab40729eb7ad5/out/libtorch/libtorch/lib";
+    /// The path to the compiled worker binary
+    pub const WORKER_BINARY: &str = "./target/debug/worker";
+
+    /// Pick `TOP_N` largest softmax probabilities in a classifier model
+    pub const TOP_N: i64 = 5;
+}
+
 /// Network utility functions
 pub mod util {
     pub fn get_available_ports(n: u16) -> Option<Vec<u16>> {
@@ -34,5 +46,13 @@ pub mod util {
             Ok(_) => true,
             Err(_) => false,
         }
+    }
+
+    pub fn init_libtorch() {
+        let ld_lib_path = std::env::var("LD_LIBRARY_PATH").unwrap();
+        std::env::set_var(
+            "LD_LIBRARY_PATH",
+            format!("${}:{}", ld_lib_path, super::config::LIBTORCH_PATH),
+        );
     }
 }

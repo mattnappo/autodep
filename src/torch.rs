@@ -1,9 +1,8 @@
 //! Code for loading and running (trained) PyTorch models
 
+use crate::config::TOP_N;
 use anyhow::Result;
 use tch::vision::imagenet;
-
-const TOP_N: i64 = 5;
 
 /// An in-memory representation of an image. Can be the input or output of a model
 #[derive(Debug)]

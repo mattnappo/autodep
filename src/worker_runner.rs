@@ -1,12 +1,15 @@
 //! Entrypoint to start a worker locally
 
+use autodep::util::init_libtorch;
 use autodep::worker::Worker;
 use std::{env, process};
 
-const USAGE: &str = "usage: ./worker <port> <torchscript file> ";
+const USAGE: &str = "usage: ./worker <port> <model file> ";
 
 #[tokio::main]
 async fn main() {
+    init_libtorch();
+
     let args: Vec<String> = env::args().collect();
     if args.len() - 1 != 2 {
         println!("{USAGE}");

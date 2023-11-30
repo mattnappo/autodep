@@ -27,6 +27,18 @@ pub enum WorkerStatus {
     Error,
 }
 
+impl From<Status> for WorkerStatus {
+    fn from(s: Status) -> Self {
+        match s.status {
+            0 => WorkerStatus::Working,
+            1 => WorkerStatus::Idle,
+            2 => WorkerStatus::ShuttingDown,
+            3 => WorkerStatus::Error,
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// A worker runs as a separate process, spawned by the resource manager.
 /// A worker runs an RPC server listening for requests to compute inference
 /// on its own local copy of the model
@@ -38,9 +50,9 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(model_filename: String, port: u16) -> Result<Self> {
+    pub fn new(model_file: String, port: u16) -> Result<Self> {
         Ok(Worker {
-            model: torch::TorchModel::new(model_filename)?,
+            model: torch::TorchModel::new(model_file)?,
             status: Mutex::new(WorkerStatus::Idle),
             port,
         })

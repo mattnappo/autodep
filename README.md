@@ -58,3 +58,6 @@ Distributed and automatic ML model deployment at scale
 - [ ] AWS (S3) input/output support
 - [ ] Make `TResult` cleaner type alias
 - [ ] Allow for `Worker`s on different hosts
+- [ ] Make a better mechanism than `thread.sleep` for waiting for a worker to start
+    - [ ] Idea: make the worker return `Ready` when its done initializing?
+- [ ] Run new `./worker` processes procs without cargo
