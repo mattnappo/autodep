@@ -91,6 +91,7 @@ impl worker_server::Worker for Worker {
         &self,
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
+        info!("got inference request");
         unimplemented!()
     }
 
@@ -100,7 +101,11 @@ impl worker_server::Worker for Worker {
         Ok(Response::new(Status { status }))
     }
 
+    // DEPRECATED
     async fn shutdown(&self, _request: Request<Empty>) -> TResult<Response<Empty>> {
-        unimplemented!()
+        info!("got shutdown request");
+        let mut g = self.status.lock().unwrap();
+        *g = WorkerStatus::ShuttingDown;
+        Ok(Response::new(Empty {}))
     }
 }

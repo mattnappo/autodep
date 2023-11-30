@@ -12,12 +12,29 @@ pub mod rpc {
 pub mod config {
     /// Path to the local libtorch installation
     pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-ff2ab40729eb7ad5/out/libtorch/libtorch/lib";
+
     /// The path to the compiled worker binary
     pub const WORKER_BINARY: &str = "./target/debug/worker";
+
+    /// Maximum number of workers
+    pub const MAX_WORKERS: usize = 20;
 
     /// Pick `TOP_N` largest softmax probabilities in a classifier model
     pub const TOP_N: i64 = 5;
 }
+
+/*
+#[derive(Debug)]
+struct GenericError(&'static str);
+
+impl std::fmt::Display for GenericError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error: {}", self.0)
+    }
+}
+
+impl std::error::Error for GenericError {}
+*/
 
 /// Network utility functions
 pub mod util {

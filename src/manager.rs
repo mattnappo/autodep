@@ -2,12 +2,14 @@
 //! interfacing with a set of workers. The manager starts and stops workers, and
 //! forwards inference requests
 
-use crate::config::WORKER_BINARY;
+use crate::config::{self, WORKER_BINARY};
 use crate::rpc::{self, worker_client::WorkerClient};
 use crate::util;
 use crate::worker::WorkerStatus;
+use anyhow::anyhow;
 use anyhow::Result;
 use log::{debug, info};
+use nix::sys::signal;
 use std::collections::HashMap;
 use std::process::Command;
 use std::{thread, time};
@@ -43,8 +45,8 @@ impl Eq for Handle {}
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
 pub struct Manager {
-    /// The ports of the current workers
-    workers: Vec<Handle>,
+    /// Map from PID to `Handle`s of current workers
+    workers: HashMap<u32, Handle>,
 
     /// The path to the TorchScript model file
     model_file: String,
@@ -53,13 +55,18 @@ pub struct Manager {
 impl Manager {
     pub fn new(model_file: String) -> Self {
         Manager {
-            workers: vec![],
+            workers: HashMap::new(),
             model_file,
         }
     }
 
     /// Start a new worker process on the local machine and connect to it
     pub async fn start_new_worker(&mut self) -> Result<()> {
+        if self.workers.len() + 1 >= config::MAX_WORKERS {
+            return Err(anyhow!(
+                "maximum number of workers exceeded. cannot allocate any more",
+            ));
+        }
         // Find an open port
         let port = util::get_available_port().unwrap(); // Use ok_or here
 
@@ -68,7 +75,12 @@ impl Manager {
         // Start a new local worker process
         let command = format!("{} {}", port, self.model_file);
         let args = command.split(' ').map(|n| n.to_string());
-        let pid = Command::new(WORKER_BINARY).args(args).spawn().unwrap().id();
+        let pid = Command::new(WORKER_BINARY)
+            .env("RUST_LOG", "debug")
+            .args(args)
+            .spawn()
+            .unwrap()
+            .id();
 
         // Wait for the local process to start
         std::thread::sleep(time::Duration::from_millis(1000));
@@ -87,7 +99,7 @@ impl Manager {
             port, pid
         );
 
-        self.workers.push(handle);
+        self.workers.insert(handle.pid, handle);
         Ok(())
     }
 
@@ -102,28 +114,42 @@ impl Manager {
 
     /// Get the statuses of all workers
     pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
-        //let conns = self.workers.iter().map(|w| w.conn).filter(|w| w.is_some());
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
 
-        let mut stream = tokio_stream::iter(&self.workers);
-        while let Some(handle) = stream.next().await {
+        let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
+        while let Some(handle) = handles.next().await {
             debug!("getting status of worker pid {}", handle.pid);
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
             let res = conn.unwrap().get_status(req).await?.into_inner();
             map.insert(handle.clone(), res.into());
-            //debug!("map: {map:#?}");
-            //debug!("workers internal: {:#?}", self.workers);
-            if self.workers.len() == map.len() {
-                break;
-            }
-            debug!("still polling");
         }
 
         Ok(map)
     }
 
-    //pub(crate) async fn kill_worker(&mut self) {}
+    /// Find an idle worker
+    async fn find_idle_worker(&self) -> Result<Handle> {
+        let mut handles = tokio_stream::iter(self.workers.values());
+        while let Some(handle) = handles.next().await {
+            let conn = handle.conn.clone();
+            let req = Request::new(rpc::Empty {});
+            let res: WorkerStatus = conn.unwrap().get_status(req).await?.into_inner().into();
+            match res {
+                WorkerStatus::Idle => return Ok(handle.clone()),
+                _ => continue,
+            }
+        }
+        Err(anyhow!("no idle workers found"))
+    }
+
+    /// Kill an idle worker and return a partial handle to it
+    pub(crate) async fn kill_worker(&mut self) -> Result<Handle> {
+        let pid = self.find_idle_worker().await?.pid;
+        let handle = self.workers.remove(&pid).unwrap();
+        signal::kill(pid.into(), signal::Signal::SIGTERM).unwrap();
+        Ok(handle)
+    }
 
     /// A testing function -- ignore
     pub async fn test(&self, port: u16) -> Result<()> {

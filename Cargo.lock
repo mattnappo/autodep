@@ -89,6 +89,7 @@ dependencies = [
  "anyhow",
  "env_logger",
  "log",
+ "nix",
  "port_scanner",
  "prost",
  "rand 0.7.3",
@@ -796,6 +797,17 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+]
+
+[[package]]
+name = "nix"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
+dependencies = [
+ "bitflags 2.4.1",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]

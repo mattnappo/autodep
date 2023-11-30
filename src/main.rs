@@ -6,6 +6,15 @@ use std::{env, process};
 
 const USAGE: &str = "usage: ./autodep <model file>";
 
+use std::io::{stdin, stdout, Read, Write};
+
+fn pause() {
+    let mut stdout = stdout();
+    stdout.write(b"Press Enter to continue...").unwrap();
+    stdout.flush().unwrap();
+    stdin().read(&mut [0]).unwrap();
+}
+
 /// This is test code right now
 #[tokio::main]
 async fn main() {
@@ -22,12 +31,15 @@ async fn main() {
     let model = args[1].clone();
 
     // Start the HTTP server
+    // TODO
 
     // Start the manager
     let mut manager = manager::Manager::new(model);
 
     // Allocate two workers
-    manager.start_new_workers(10).await.unwrap();
+    manager.start_new_workers(2).await.unwrap();
+
+    pause();
 
     // Get the statuses of all workers
     debug!("calling status");

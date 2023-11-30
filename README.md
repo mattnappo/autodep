@@ -9,21 +9,21 @@ Distributed and automatic ML model deployment at scale
     - [x] Lib Func to load torchscript
     - [x] Lib Func to run
 - [ ] Worker code
-    - [ ] On init:
-        - [ ] load pytorch model
-        - [ ] start RPC server listening for requests
-    - [ ] Creates RPC server that listens for requests to:
+    - [x] On init:
+        - [x] load pytorch model
+        - [x] start RPC server listening for requests
+    - [x] Creates RPC server that listens for requests to:
         - [ ] Run Inference on some input (input needs to be serialized as RPC)
-        - [ ] return its status
-        - [ ] "Gracefully" be shut down
+        - [x] return its status
+        - [x] "Gracefully" be shut down
     - [ ] On inference handler:
         - [ ] Run inference on the model
-    - [ ] on shutdown handler:
-        - [ ] terminate itself
+    - [x] on shutdown handler:
+        - [x] terminate itself
     - [ ] Make proper containerization system (optional)
         - [ ] Will allow extra files to be copied in to the container (do not allow this in v1)
 - [ ] Resource allocator / worker manager
-    - [ ] keep track of how many workers are idle/working
+    - [x] keep track of how many workers are idle/working
     - [ ] Automatically pick an idle worker
         - [ ] if all workers are busy, make a new one or enter a queue (have a MAX WORKERS value)
     - [ ] start AND RUN a worker when necessary
@@ -60,5 +60,6 @@ Distributed and automatic ML model deployment at scale
 - [ ] Allow for `Worker`s on different hosts
 - [ ] Make a better mechanism than `thread.sleep` for waiting for a worker to start
     - [ ] Idea: make the worker return `Ready` when its done initializing?
+    - [ ] Idea: have a timeout mechanism?
 - [ ] Run new `./worker` processes procs without cargo
 - [ ] Fix the jank in `all_status`
