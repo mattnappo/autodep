@@ -8,27 +8,27 @@ Distributed and automatic ML model deployment at scale
 - [x] Pytorch loading
     - [x] Lib Func to load torchscript
     - [x] Lib Func to run
-- [ ] Worker code
+- [x] Worker code
     - [x] On init:
         - [x] load pytorch model
         - [x] start RPC server listening for requests
     - [x] Creates RPC server that listens for requests to:
-        - [ ] Run Inference on some input (input needs to be serialized as RPC)
+        - [x] Run Inference on some input (input needs to be serialized as RPC)
         - [x] return its status
         - [x] "Gracefully" be shut down
-    - [ ] On inference handler:
-        - [ ] Run inference on the model
+    - [x] On inference handler:
+        - [x] Run inference on the model
     - [x] on shutdown handler:
         - [x] terminate itself
     - [ ] Make proper containerization system (optional)
         - [ ] Will allow extra files to be copied in to the container (do not allow this in v1)
-- [ ] Resource allocator / worker manager
+- [x] Resource allocator / worker manager
     - [x] keep track of how many workers are idle/working
-    - [ ] Automatically pick an idle worker
+    - [x] Automatically pick an idle worker
         - [ ] if all workers are busy, make a new one or enter a queue (have a MAX WORKERS value)
-    - [ ] start AND RUN a worker when necessary
-    - [ ] start idle workers
-    - [ ] kill workers
+    - [x] start AND RUN a worker when necessary
+    - [x] start idle workers
+    - [x] kill workers
 - [ ] Autoscaling algorithm (optional)
     - [ ] Look at past fixed window of HTTP traffic and determine how many workers to spin up/shut down
 - [ ] HTTP server

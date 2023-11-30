@@ -146,17 +146,12 @@ impl TorchModel {
 mod tests {
     use super::*;
     use crate::util::test;
-    use std::fs;
-    use std::io::Read;
 
     #[test]
     fn test_run() {
         let loader = TorchModel::new("models/resnet18.pt".into()).unwrap();
-
         let img = test::get_test_image();
-
         let outputs = loader.run(img).unwrap();
-
         println!("outputs: {outputs:#?}");
     }
 }

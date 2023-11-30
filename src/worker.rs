@@ -94,7 +94,6 @@ impl worker_server::Worker for Worker {
     ) -> TResult<Response<ClassOutput>> {
         info!("got inference request");
         let image: torch::InputData = _request.into_inner().into();
-        debug!("image input: {:#?}", image);
 
         let output = self.run(image).unwrap();
         return Ok(Response::new(output.into()));
