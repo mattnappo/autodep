@@ -61,3 +61,4 @@ Distributed and automatic ML model deployment at scale
 - [ ] Make a better mechanism than `thread.sleep` for waiting for a worker to start
     - [ ] Idea: make the worker return `Ready` when its done initializing?
 - [ ] Run new `./worker` processes procs without cargo
+- [ ] Fix the jank in `all_status`

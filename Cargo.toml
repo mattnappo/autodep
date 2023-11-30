@@ -19,6 +19,9 @@ path = "src/lib.rs"
 env_logger = "0.10.1"
 anyhow = "1.0.75"
 tch = { version = "0.14.0", features = [ "download-libtorch" ] }
+log = "0.4.20"
+
+port_scanner = "0.1.5"
 
 tonic = "0.10"
 prost = "0.12"

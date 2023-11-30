@@ -5,6 +5,7 @@ use crate::rpc::worker_server::{self, WorkerServer};
 use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
 use crate::torch;
 use anyhow::Result;
+use log::{debug, info};
 use std::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response};
@@ -60,6 +61,10 @@ impl Worker {
 
     /// Start listening for requests
     pub async fn start(self) -> Result<()> {
+        info!(
+            "starting new worker on port {} with model {:?}",
+            self.port, self.model
+        );
         let addr = format!("[::1]:{}", self.port).parse().unwrap();
         let svc = WorkerServer::new(self);
         Server::builder().add_service(svc).serve(addr).await?;
@@ -90,6 +95,7 @@ impl worker_server::Worker for Worker {
     }
 
     async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
+        info!("got status request");
         let status = self.status() as i32;
         Ok(Response::new(Status { status }))
     }

@@ -9,6 +9,7 @@ const USAGE: &str = "usage: ./worker <port> <model file> ";
 #[tokio::main]
 async fn main() {
     init_libtorch();
+    env_logger::init();
 
     let args: Vec<String> = env::args().collect();
     if args.len() - 1 != 2 {

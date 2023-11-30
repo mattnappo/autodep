@@ -1,5 +1,7 @@
 use autodep::manager;
 use autodep::util::init_libtorch;
+use env_logger;
+use log::{debug, info, warn};
 use std::{env, process};
 
 const USAGE: &str = "usage: ./autodep <model file>";
@@ -8,6 +10,7 @@ const USAGE: &str = "usage: ./autodep <model file>";
 #[tokio::main]
 async fn main() {
     init_libtorch();
+    env_logger::init();
 
     // Parse arguments
     let args: Vec<String> = env::args().collect();
@@ -24,15 +27,11 @@ async fn main() {
     let mut manager = manager::Manager::new(model);
 
     // Allocate two workers
-    let handle1 = manager.start_new_worker().await.unwrap();
-    dbg!(handle1);
-
-    std::thread::sleep(std::time::Duration::from_millis(5000));
-
-    let handle2 = manager.start_new_worker().await.unwrap();
-    dbg!(handle2);
+    manager.start_new_worker().await.unwrap();
+    manager.start_new_worker().await.unwrap();
 
     // Get the statuses of all workers
+    debug!("calling status");
     let status = manager.all_status().await.unwrap();
-    dbg!(status);
+    info!("worker statuses: {:#?}", status);
 }

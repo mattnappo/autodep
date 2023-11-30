@@ -7,9 +7,11 @@ use crate::rpc::{self, worker_client::WorkerClient};
 use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::Result;
+use log::{debug, info};
 use std::collections::HashMap;
 use std::process::Command;
 use std::{thread, time};
+use tch::IndexOp;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::{Request, Response};
@@ -57,10 +59,11 @@ impl Manager {
     }
 
     /// Start a new worker process on the local machine and connect to it
-    /// Return a handle to the worker
-    pub async fn start_new_worker(&mut self) -> Result<&Handle> {
+    pub async fn start_new_worker(&mut self) -> Result<()> {
         // Find an open port
         let port = util::get_available_port().unwrap(); // Use ok_or here
+
+        debug!("found free port {port}");
 
         // Start a new local worker process
         let command = format!("{} {}", port, self.model_file);
@@ -79,8 +82,13 @@ impl Manager {
             conn: Some(client),
         };
 
+        info!(
+            "manager started a new worker on (port = {}, pid = {})",
+            port, pid
+        );
+
         self.workers.push(handle);
-        Ok(self.workers.last().unwrap())
+        Ok(())
     }
 
     /// Get the statuses of all workers
@@ -89,10 +97,17 @@ impl Manager {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
 
         while let Some(handle) = tokio_stream::iter(&self.workers).next().await {
+            debug!("getting status of worker pid {}", handle.pid);
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
             let res = conn.unwrap().get_status(req).await?.into_inner();
             map.insert(handle.clone(), res.into());
+            //debug!("map: {map:#?}");
+            //debug!("workers internal: {:#?}", self.workers);
+            if self.workers.len() == map.len() {
+                break;
+            }
+            debug!("still polling");
         }
 
         Ok(map)

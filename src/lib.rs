@@ -33,12 +33,18 @@ pub mod util {
         }
     }
 
+    /*
     pub fn get_available_port() -> Option<u16> {
         (8000..(12000))
             .filter(|port| port_is_available(*port))
             .collect::<Vec<u16>>()
             .first()
             .cloned()
+    }
+    */
+
+    pub fn get_available_port() -> Option<u16> {
+        port_scanner::request_open_port()
     }
 
     fn port_is_available(port: u16) -> bool {
@@ -54,5 +60,6 @@ pub mod util {
             "LD_LIBRARY_PATH",
             format!("${}:{}", ld_lib_path, super::config::LIBTORCH_PATH),
         );
+        std::env::set_var("RUST_LOG", "debug");
     }
 }
