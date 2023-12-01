@@ -5,10 +5,13 @@
 use crate::config::*;
 use crate::manager::Manager;
 use actix_web::http::header::ContentType;
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder, Result};
+use actix_web::http::StatusCode;
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use log::debug;
 use protocol::*;
 use std::sync::Mutex;
+
+type Result<T> = std::result::Result<T, WebError>;
 
 // tmp
 use crate::manager::Handle;
@@ -43,25 +46,14 @@ mod protocol {
     }
 }
 
-#[derive(Debug)]
 pub struct Server {
-    manager: Manager,
-}
-
-pub struct Empty {
-    s: String,
-}
-
-impl Empty {
-    pub fn new(s: String) -> Self {
-        Self { s }
-    }
+    manager: Mutex<Manager>,
 }
 
 impl Server {
     pub fn new(model_file: String) -> Result<Self> {
         Ok(Server {
-            manager: Manager::new(model_file),
+            manager: Mutex::new(Manager::new(model_file)),
         })
     }
 }
@@ -69,44 +61,53 @@ impl Server {
 /// Handle HTTP request for inference
 #[get("/inference")]
 pub async fn inference(_req: HttpRequest, state: web::Data<Server>) -> Result<impl Responder> {
-    //pub async fn inference(_req: HttpRequest, state: web::Data<Server>) -> Result<impl Responder> {
     //let manager = state.manager.lock().unwrap();
-    //manager.run_inference();
 
-    debug!("got request {:#?}", _req);
-
-    debug!("state: {state:#?}");
-
-    let test_handle = Handle {
-        port: 123,
-        pid: 456,
-        conn: None,
-    };
-
-    let test = (test_handle, WorkerStatus::Working);
-    let map = HashMap::from([test]);
-
-    /*
-    HttpResponse::Ok()
-        .content_type(ContentType::json())
-        //.json(AllStatusResponse(map))
-        .json(vec![1, 2, 3])
-    */
-
-    Ok(web::Json(AllStatusResponse(map)))
+    Ok(web::Json("ok"))
 }
 
 /// HTTP request to get server statistics
 #[get("/manager_info")]
-pub async fn manager_info(_req: HttpRequest, state: web::Data<Server>) -> HttpResponse {
+pub async fn manager_info(_req: HttpRequest, state: web::Data<Server>) -> Result<impl Responder> {
     let mut manager = state.manager.lock().unwrap();
 
-    match manager.all_status().await {
-        Ok(status) => HttpResponse::Ok()
-            .content_type(JSON)
-            .json(Into::<AllStatusResponse>::into(status)),
-        Err(e) => HttpResponse::InternalServerError()
-            .content_type(JSON)
-            .json(format!("{e:?}")),
+    let status = manager.all_status().await;
+
+    match status {
+        Ok(s) => Ok(web::Json(format!("{s:?}"))),
+        Err(e) => Err(WebError { err: e }),
+        //Err(e) => Ok(web::Json("some error lol".to_string())),
+    }
+}
+
+#[derive(Debug)]
+pub struct WebError {
+    err: anyhow::Error,
+}
+
+impl std::fmt::Display for WebError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.err)
+    }
+}
+
+impl actix_web::error::ResponseError for WebError {
+    fn error_response(&self) -> HttpResponse {
+        println!("weird don't run plz");
+        let err = HashMap::from([("errors", vec![self.to_string()])]);
+
+        HttpResponse::build(self.status_code())
+            .insert_header(ContentType::json())
+            .json(err)
+    }
+
+    fn status_code(&self) -> StatusCode {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
+impl From<anyhow::Error> for WebError {
+    fn from(err: anyhow::Error) -> WebError {
+        WebError { err }
     }
 }

@@ -19,7 +19,7 @@ fn get_args() -> (String, u16) {
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "debug,actix_web=debug,actix_server=info");
+    env::set_var("RUST_LOG", "actix_web=debug,actix_server=debug");
     env_logger::init();
 
     let (model, port) = get_args();
@@ -32,7 +32,7 @@ async fn main() -> io::Result<()> {
             .app_data(web::Data::new(server))
             .wrap(middleware::Logger::default())
             .service(server::inference)
-        //.service(server::manager_info)
+            .service(server::manager_info)
     })
     .bind(format!("0.0.0.0:{port}"))?
     .run()

@@ -7,6 +7,7 @@ use crate::torch;
 use anyhow::anyhow;
 use anyhow::Result;
 use log::{debug, info};
+use serde::Serialize;
 use std::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response};
@@ -14,7 +15,7 @@ use tonic::{Request, Response};
 type TResult<T> = Result<T, tonic::Status>;
 
 /// The current status of a worker
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum WorkerStatus {
     /// Currently computing inference
     Working = 0,

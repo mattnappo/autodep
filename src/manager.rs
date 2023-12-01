@@ -12,6 +12,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use log::{debug, info};
 use nix::{sys::signal, unistd};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
 use std::{thread, time};
@@ -21,11 +22,18 @@ use tonic::transport::Channel;
 use tonic::{Request, Response};
 
 /// A handle to a worker
-#[derive(Debug, Clone)]
+#[derive(Clone, Serialize)]
 pub struct Handle {
     pub port: u16,
     pub pid: u32,
+    #[serde(skip_serializing)]
     pub conn: Option<WorkerClient<Channel>>,
+}
+
+impl std::fmt::Debug for Handle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
+    }
 }
 
 impl std::hash::Hash for Handle {
@@ -46,7 +54,6 @@ impl Eq for Handle {}
 
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
-#[derive(Debug)]
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
     workers: HashMap<u32, Handle>,
@@ -142,7 +149,7 @@ impl Manager {
     pub async fn all_status(&mut self) -> Result<HashMap<Handle, WorkerStatus>> {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
         if self.workers.len() == 0 {
-            self.start_new_worker().await?;
+            self.start_new_workers(3).await?;
         }
 
         let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
