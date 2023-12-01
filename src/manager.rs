@@ -23,9 +23,9 @@ use tonic::{Request, Response};
 /// A handle to a worker
 #[derive(Debug, Clone)]
 pub struct Handle {
-    port: u16,
-    pid: u32,
-    conn: Option<WorkerClient<Channel>>,
+    pub port: u16,
+    pub pid: u32,
+    pub conn: Option<WorkerClient<Channel>>,
 }
 
 impl std::hash::Hash for Handle {
@@ -46,6 +46,7 @@ impl Eq for Handle {}
 
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
+#[derive(Debug)]
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
     workers: HashMap<u32, Handle>,
@@ -63,7 +64,7 @@ impl Manager {
     }
 
     /// Start a new worker process on the local machine and connect to it
-    pub async fn start_new_worker(&mut self) -> Result<()> {
+    async fn start_new_worker(&mut self) -> Result<()> {
         if self.workers.len() + 1 >= config::MAX_WORKERS {
             return Err(anyhow!(
                 "maximum number of workers exceeded. cannot allocate any more",
@@ -105,15 +106,6 @@ impl Manager {
         Ok(())
     }
 
-    /// Start a new worker process on the local machine and connect to it
-    pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
-        let mut stream = tokio_stream::iter(0..n);
-        while let Some(_) = stream.next().await {
-            self.start_new_worker().await?;
-        }
-        Ok(())
-    }
-
     /// Find an idle worker
     async fn find_idle_worker(&self) -> Result<Handle> {
         let mut handles = tokio_stream::iter(self.workers.values());
@@ -131,21 +123,11 @@ impl Manager {
 
     // ----- Interface ----- //
 
-    /// Kill an idle worker and return a partial handle to it
-    pub async fn kill_worker(&mut self) -> Result<Handle> {
-        // Find an idle worker
-        let pid = self.find_idle_worker().await?.pid;
-        // Remove it from the worker store
-        let handle = self.workers.remove(&pid).unwrap();
-        // Kill the process
-        signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
-        Ok(handle)
-    }
-
     /// Run inference on an idle worker
     pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
         // Find an idle worker
-        let handle = self.find_idle_worker().await?;
+        let handle = self.find_idle_worker().await?; // TODO: MAKE IT ADD A NEW ONE IF DOESN'T
+                                                     // EXIST
         match handle.conn {
             Some(mut conn) => {
                 let req = Request::new(input.into());
@@ -157,8 +139,11 @@ impl Manager {
     }
 
     /// Get the statuses of all workers
-    pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
+    pub async fn all_status(&mut self) -> Result<HashMap<Handle, WorkerStatus>> {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
+        if self.workers.len() == 0 {
+            self.start_new_worker().await?;
+        }
 
         let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
         while let Some(handle) = handles.next().await {
@@ -172,15 +157,23 @@ impl Manager {
         Ok(map)
     }
 
-    /// A testing function -- ignore
-    pub async fn test(&self, port: u16) -> Result<()> {
-        let mut client = WorkerClient::connect(format!("http://[::1]:{port}")).await?;
-
-        let req = Request::new(rpc::Empty {});
-        let res = client.get_status(req).await?;
-
-        println!("RESPONSE = {:?}", res);
-
+    /// Start a new worker process on the local machine and connect to it
+    pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
+        let mut stream = tokio_stream::iter(0..n);
+        while let Some(_) = stream.next().await {
+            self.start_new_worker().await?;
+        }
         Ok(())
+    }
+
+    /// Kill an idle worker and return a partial handle to it
+    pub async fn kill_worker(&mut self) -> Result<Handle> {
+        // Find an idle worker
+        let pid = self.find_idle_worker().await?.pid;
+        // Remove it from the worker store
+        let handle = self.workers.remove(&pid).unwrap();
+        // Kill the process
+        signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
+        Ok(handle)
     }
 }

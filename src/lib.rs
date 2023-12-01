@@ -1,4 +1,5 @@
 pub mod manager;
+pub mod server;
 pub mod torch;
 pub mod worker;
 
@@ -19,6 +20,9 @@ pub mod config {
 
     /// Maximum number of workers
     pub const MAX_WORKERS: usize = 20;
+
+    /// Number of workers to start the server with
+    pub const NUM_INIT_WORKERS: u16 = 2;
 
     /// Pick `TOP_N` largest softmax probabilities in a classifier model
     pub const TOP_N: i64 = 5;

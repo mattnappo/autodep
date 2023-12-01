@@ -9,26 +9,42 @@ path = "src/main.rs"
 name = "autodep"
 
 [[bin]]
-path = "src/worker_runner.rs"
+path = "src/init_worker.rs"
 name = "worker"
+
+# This binary is temporary
+[[bin]]
+path = "src/init_server.rs"
+name = "server"
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
+# util
 env_logger = "0.10.1"
 anyhow = "1.0.75"
-tch = { version = "0.14.0", features = [ "download-libtorch" ] }
 log = "0.4.20"
 port_scanner = "0.1.5"
-tonic = "0.10"
-prost = "0.12"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream = "0.1.14"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 rand = "0.7"
 nix = { version = "0.27.1", features = ["signal"] }
+
+# worker rpc server
+tonic = "0.10"
+prost = "0.12"
+tch = { version = "0.14.0", features = [ "download-libtorch" ] }
+
+# for http server
+#jsonrpc-v2 = { version = "0.13.0", default-features = false, features = ["hyper-integration"] }
+#serde = { version = "1.0", features = ["derive"] }
+#serde_json = "1.0"
+#hyper = { version = "0.14", features = ["server"] }
+actix-rt = "2.9.0"
+actix-web = "4.4.0"
+serde = "1.0.193"
+serde_json = "1.0.108"
 
 [build-dependencies]
 tonic-build = "0.10"
