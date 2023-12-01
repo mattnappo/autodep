@@ -114,18 +114,18 @@ impl Manager {
     }
 
     /// Find an idle worker
-    async fn find_idle_worker(&self) -> Result<Handle> {
+    async fn find_idle_worker(&self) -> Result<Option<Handle>> {
         let mut handles = tokio_stream::iter(self.workers.values());
         while let Some(handle) = handles.next().await {
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
             let res: WorkerStatus = conn.unwrap().get_status(req).await?.into_inner().into();
             match res {
-                WorkerStatus::Idle => return Ok(handle.clone()),
+                WorkerStatus::Idle => return Ok(Some(handle.clone())),
                 _ => continue,
             }
         }
-        Err(anyhow!("no idle workers found"))
+        Ok(None)
     }
 
     // ----- Interface ----- //
@@ -133,24 +133,37 @@ impl Manager {
     /// Run inference on an idle worker
     pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
         // Find an idle worker
-        let handle = self.find_idle_worker().await?; // TODO: MAKE IT ADD A NEW ONE IF DOESN'T
-                                                     // EXIST
-        match handle.conn {
-            Some(mut conn) => {
-                let req = Request::new(input.into());
-                let res = conn.image_inference(req).await?.into_inner().into();
-                Ok(res)
+        if let Some(handle) = self.find_idle_worker().await? {
+            match handle.conn {
+                Some(mut conn) => {
+                    let req = Request::new(input.into());
+                    let res = conn.image_inference(req).await?.into_inner().into();
+                    Ok(res)
+                }
+                None => todo!(), // Try to connect again
             }
-            None => todo!(), // Try to connect again
+        } else {
+            self.start_new_worker().await?;
+
+            // TODO: Terrible code
+            if let Some(handle) = self.find_idle_worker().await? {
+                match handle.conn {
+                    Some(mut conn) => {
+                        let req = Request::new(input.into());
+                        let res = conn.image_inference(req).await?.into_inner().into();
+                        Ok(res)
+                    }
+                    None => todo!(), // Try to connect again
+                }
+            } else {
+                Err(anyhow!("couldn't find an available worker"))
+            }
         }
     }
 
     /// Get the statuses of all workers
     pub async fn all_status(&mut self) -> Result<HashMap<Handle, WorkerStatus>> {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
-        if self.workers.len() == 0 {
-            self.start_new_workers(3).await?;
-        }
 
         let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
         while let Some(handle) = handles.next().await {
@@ -176,11 +189,18 @@ impl Manager {
     /// Kill an idle worker and return a partial handle to it
     pub async fn kill_worker(&mut self) -> Result<Handle> {
         // Find an idle worker
-        let pid = self.find_idle_worker().await?.pid;
-        // Remove it from the worker store
-        let handle = self.workers.remove(&pid).unwrap();
-        // Kill the process
-        signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
-        Ok(handle)
+        match self.find_idle_worker().await? {
+            // If that worker exists, kill it
+            Some(h) => {
+                let pid = h.pid;
+                // Remove it from the worker store
+                let handle = self.workers.remove(&pid).unwrap();
+                // Kill the process
+                signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
+                Ok(handle)
+            }
+            // If not, return err
+            None => Err(anyhow!("no idle workers to kill")),
+        }
     }
 }

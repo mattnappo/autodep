@@ -67,3 +67,4 @@ Distributed and automatic ML model deployment at scale
 - [ ] Fix the jank in `all_status`
 - [ ] Make `class_int` optional in the protobuf
 - [ ] Maybe remove second layer of indirection `Server` around `Manager`
+- [ ] Make image deserialization on web side more robust

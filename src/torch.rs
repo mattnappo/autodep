@@ -3,10 +3,11 @@
 use crate::config::TOP_N;
 use crate::rpc;
 use anyhow::Result;
+use serde::Serialize;
 use tch::vision::imagenet;
 
 /// An in-memory representation of an image. Can be the input or output of a model
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Image {
     pub(crate) image: Vec<u8>,
     pub(crate) height: Option<u32>,
@@ -14,7 +15,7 @@ pub struct Image {
 }
 
 /// A class prediction outputted by a classifier model
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Class {
     probability: Option<f64>,
     class: Option<i32>,
@@ -22,7 +23,7 @@ pub struct Class {
 }
 
 /// The output of a model's inference
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum Inference {
     Text(String),
     Classes(Vec<Class>),

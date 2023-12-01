@@ -31,7 +31,7 @@ async fn main() -> io::Result<()> {
         App::new()
             .app_data(web::Data::new(server))
             .wrap(middleware::Logger::default())
-            .service(server::inference)
+            .service(server::image_inference)
             .service(server::manager_info)
     })
     .bind(format!("0.0.0.0:{port}"))?
