@@ -1,5 +1,6 @@
 use actix_web::{middleware, web, App, HttpServer};
 use autodep::server::{self, routes};
+use std::sync::{Arc, Mutex};
 use std::{env, io, process};
 
 const USAGE: &str = "usage: ./autodep <port> <model file> ";
@@ -21,18 +22,20 @@ fn get_args() -> (String, u16) {
 async fn main() -> io::Result<()> {
     env::set_var(
         "RUST_LOG",
-        "autodep=debug,actix_web=debug,actix_server=info",
+        "h2=warn,autodep=debug,actix_web=debug,actix_server=info",
     );
     //env::set_var("RUST_LOG", "debug");
     env_logger::init();
 
     let (model, port) = get_args();
 
+    let server = web::Data::new(Mutex::new(server::Server::new(model.clone()).unwrap()));
+    //let server = ;
+
     // Start the HTTP server
     HttpServer::new(move || {
-        let server = server::Server::new(model.clone()).unwrap();
         App::new()
-            .app_data(web::Data::new(server))
+            .app_data(server.clone())
             .wrap(middleware::Logger::default())
             .service(routes::image_inference)
             .service(routes::workers)

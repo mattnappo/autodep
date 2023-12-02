@@ -39,7 +39,7 @@ pub async fn image_inference(
     };
 
     // Tell the manager to compute inference
-    let mut manager = state.manager.lock().unwrap();
+    let manager = state.manager.lock().unwrap();
     let output = manager.run_inference(input).await.unwrap();
 
     Ok(web::Json(output))
@@ -48,8 +48,12 @@ pub async fn image_inference(
 
 /// HTTP request to get the status of all workers
 #[get("/workers/status")]
-pub async fn worker_status(_req: HttpRequest, state: web::Data<Server>) -> Result<impl Responder> {
-    let mut manager = state.manager.lock().unwrap();
+pub async fn worker_status(
+    _req: HttpRequest,
+    state: web::Data<Mutex<Server>>,
+) -> Result<impl Responder> {
+    let manager = state.lock().unwrap();
+    let manager = (*manager).manager.lock().unwrap();
 
     let status = manager.all_status().await;
 
@@ -62,8 +66,10 @@ pub async fn worker_status(_req: HttpRequest, state: web::Data<Server>) -> Resul
 
 /// HTTP request to get server statistics
 #[get("/workers")]
-pub async fn workers(_req: HttpRequest, state: web::Data<Server>) -> impl Responder {
-    let mut manager = state.manager.lock().unwrap();
+pub async fn workers(_req: HttpRequest, state: web::Data<Mutex<Server>>) -> impl Responder {
+    let manager = state.lock().unwrap();
+    let manager = (*manager).manager.lock().unwrap();
+
     let workers = manager.all_workers();
     warn!("Workers: {workers:#?}");
     web::Json(workers)

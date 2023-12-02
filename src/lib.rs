@@ -40,7 +40,6 @@ pub mod util {
             "LD_LIBRARY_PATH",
             format!("${}:{}", ld_lib_path, super::config::LIBTORCH_PATH),
         );
-        std::env::set_var("RUST_LOG", "debug");
     }
 
     /// Functions for testing purposes

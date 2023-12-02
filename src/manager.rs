@@ -10,12 +10,13 @@ use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use nix::{sys::signal, unistd};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::{thread, time};
 use tch::IndexOp;
@@ -32,33 +33,15 @@ pub struct Handle {
     pub conn: Option<WorkerClient<Channel>>,
 }
 
-impl std::fmt::Debug for Handle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
-    }
-}
-
-impl std::hash::Hash for Handle {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        // Skip hashing the conn
-        (&self.port, &self.pid).hash(state);
-    }
-}
-impl PartialEq for Handle {
-    fn eq(&self, other: &Self) -> bool {
-        self.port == other.port && self.pid == other.pid
-    }
-}
-impl Eq for Handle {}
+//unsafe impl Send for Handle {}
+//unsafe impl Sync for Handle {}
 
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
-    workers: Arc<RwLock<HashMap<u32, Handle>>>,
+    //workers: Arc<RwLock<HashMap<u32, Handle>>>,
+    workers: Arc<Mutex<HashMap<u32, Handle>>>,
 
     /// The path to the TorchScript model file
     model_file: String,
@@ -66,15 +49,17 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(model_file: String) -> Self {
+        error!("\n\nMADE A NEW MANAGER\n\n");
         Manager {
-            workers: Arc::new(RwLock::new(HashMap::new())),
+            //workers: Arc::new(RwLock::new(HashMap::new())),
+            workers: Arc::new(Mutex::new(HashMap::new())),
             model_file,
         }
     }
 
     /// Start a new worker process on the local machine and connect to it
-    async fn start_new_worker(&mut self) -> Result<()> {
-        let mut workers = (*self.workers).write().unwrap();
+    async fn start_new_worker(&self) -> Result<Handle> {
+        let mut workers = self.workers.lock().unwrap();
         if workers.len() + 1 >= config::MAX_WORKERS {
             return Err(anyhow!(
                 "maximum number of workers exceeded. cannot allocate any more",
@@ -89,7 +74,7 @@ impl Manager {
         let command = format!("{} {}", port, self.model_file);
         let args = command.split(' ').map(|n| n.to_string());
         let pid = Command::new(WORKER_BINARY)
-            .env("RUST_LOG", "debug")
+            .env("RUST_LOG", "autodep=debug")
             .args(args)
             .spawn()
             .unwrap()
@@ -113,14 +98,15 @@ impl Manager {
         );
 
         //workers.insert(handle.pid, handle);
-        workers.insert(handle.pid, handle);
-        warn!("upon add: {workers:?}");
-        Ok(())
+        let x = workers.insert(handle.pid, handle.clone());
+        warn!("\tupon add: {workers:?}");
+        warn!("\tx is : {x:?}");
+        Ok(handle)
     }
 
     /// Find an idle worker
     async fn find_idle_worker(&self) -> Result<Option<Handle>> {
-        let workers = (*self.workers).read().unwrap();
+        let workers = self.workers.lock().unwrap();
         let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
             let conn = handle.conn.clone();
@@ -137,7 +123,7 @@ impl Manager {
     // ----- Interface ----- //
 
     /// Run inference on an idle worker
-    pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
+    pub async fn run_inference(&self, input: InputData) -> Result<Inference> {
         // Find an idle worker
         if let Some(handle) = self.find_idle_worker().await? {
             match handle.conn {
@@ -149,29 +135,25 @@ impl Manager {
                 None => todo!(), // Try to connect again
             }
         } else {
-            self.start_new_worker().await?;
+            let handle = self.start_new_worker().await?;
+            warn!("busy so created new handle: {handle:#?}");
 
-            // TODO: Terrible code
-            if let Some(handle) = self.find_idle_worker().await? {
-                match handle.conn {
-                    Some(mut conn) => {
-                        let req = Request::new(input.into());
-                        let res = conn.image_inference(req).await?.into_inner().into();
-                        Ok(res)
-                    }
-                    None => todo!(), // Try to connect again
+            match handle.conn {
+                Some(mut conn) => {
+                    let req = Request::new(input.into());
+                    let res = conn.image_inference(req).await?.into_inner().into();
+                    Ok(res)
                 }
-            } else {
-                Err(anyhow!("couldn't find an available worker"))
+                None => todo!(), // Try to connect again
             }
         }
     }
 
     /// Get the statuses of all workers
-    pub async fn all_status(&mut self) -> Result<HashMap<Handle, WorkerStatus>> {
+    pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
 
-        let workers = self.workers.read().unwrap();
+        let workers = self.workers.lock().unwrap();
         //let mut handles = tokio_stream::iter(workers.values().collect::<Vec<&Handle>>());
         let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
@@ -185,9 +167,11 @@ impl Manager {
         Ok(map)
     }
 
+    // idea: the Manager is being cloned in the data part of the actix framework
+
     /// Return all the workers, without their status
-    pub fn all_workers(&mut self) -> Vec<Handle> {
-        let workers = self.workers.read().unwrap();
+    pub fn all_workers(&self) -> Vec<Handle> {
+        let workers = self.workers.lock().unwrap();
         warn!("WORKERS INTERNAL: {:#?}", workers.values());
         workers
             .values()
@@ -209,14 +193,14 @@ impl Manager {
     }
 
     /// Kill an idle worker and return a partial handle to it
-    pub async fn kill_worker(&mut self) -> Result<Handle> {
+    pub async fn kill_worker(&self) -> Result<Handle> {
         // Find an idle worker
         match self.find_idle_worker().await? {
             // If that worker exists, kill it
             Some(h) => {
                 let pid = h.pid;
                 // Remove it from the worker store
-                let mut workers = self.workers.write().unwrap();
+                let mut workers = self.workers.lock().unwrap();
                 let handle = workers.remove(&pid).unwrap();
                 // Kill the process
                 signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
@@ -227,3 +211,25 @@ impl Manager {
         }
     }
 }
+
+impl std::fmt::Debug for Handle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
+    }
+}
+
+impl std::hash::Hash for Handle {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        // Skip hashing the conn
+        (&self.port, &self.pid).hash(state);
+    }
+}
+impl PartialEq for Handle {
+    fn eq(&self, other: &Self) -> bool {
+        self.port == other.port && self.pid == other.pid
+    }
+}
+impl Eq for Handle {}
