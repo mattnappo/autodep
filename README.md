@@ -1,10 +1,17 @@
 # autodep
 Distributed and automatic ML model deployment at scale
 
-## Todo
-- [ ] Make and train a few small models in pytorch
-    - [x] resnet
+## Tasks
+- [ ] Make and train a few small models in pytorch ([see this](https://pytorch.org/vision/stable/models.html))
+    - [ ] Image classification
+        - [x] resnet18
+        - [ ] resnet50
+    - [ ] semantic segmentation
+        - [ ] deeplab v3
+    - [ ] object detection
+        - [ ] faster -CNN
     - [ ] transformer
+        - [ ] huggingface roberta exported to torchscript ([see this](https://huggingface.co/docs/transformers/torchscript))
 - [x] Pytorch loading
     - [x] Lib Func to load torchscript
     - [x] Lib Func to run
@@ -45,8 +52,11 @@ Distributed and automatic ML model deployment at scale
     - [ ] Capture metrics / statistics
 - [ ] Write final paper report
 
-## Loading and running torch
-[Source](https://github.com/LaurentMazare/tch-rs/blob/main/examples/jit/README.md)
+## Sources
+* [Running TorchScript](https://github.com/LaurentMazare/tch-rs/blob/main/examples/jit/README.md)
+* [Actix Twitter Clone](https://hub.qovery.com/guides/tutorial/create-a-blazingly-fast-api-in-rust-part-1/)
+* [Actix Image uploads](https://www.reddit.com/r/rust/comments/xzrznn/how_to_upload_and_download_files_through_actix_web/)
+* [gRPC in Rust](https://github.com/hyperium/tonic/blob/master/examples/routeguide-tutorial.md)
 
 ## Future Improvements
 - [ ] All `todo!()` and `TODO` code
@@ -68,3 +78,7 @@ Distributed and automatic ML model deployment at scale
 - [ ] Make `class_int` optional in the protobuf
 - [ ] Maybe remove second layer of indirection `Server` around `Manager`
 - [ ] Make image deserialization on web side more robust
+
+## Important improvements
+- [ ] in `start_new_worker` -- a better mechanism than `thread.sleep`
+- [ ] in `run_inference` -- a better mechanism for starting a new worker
