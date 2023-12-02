@@ -25,25 +25,25 @@ Distributed and automatic ML model deployment at scale
 - [x] Resource allocator / worker manager
     - [x] keep track of how many workers are idle/working
     - [x] Automatically pick an idle worker
-        - [ ] if all workers are busy, make a new one or enter a queue (have a MAX WORKERS value)
-    - [ ] Make manager spin up a new worker if it doesn't have an idle one on inference request
-    - [ ] start AND RUN a worker when necessary
+        - [x] if all workers are busy, make a new one or enter a queue (have a MAX WORKERS value)
+    - [x] Make manager spin up a new worker if it doesn't have an idle one on inference request
+    - [x] start AND RUN a worker when necessary
     - [x] lib code to start a new worker
     - [x] lib code to kill workers
 - [ ] Autoscaling algorithm (optional)
     - [ ] Look at past fixed window of HTTP traffic and determine how many workers to spin up/shut down
-- [ ] HTTP server
+- [x] HTTP server
     - [ ] Parse config file to determine input type
-    - [ ] Make a single route for inference to the model
-    - [ ] Start the HTTP server
-    - [ ] HTTP server has a ResourceAllocator and will call RA methods to spin up/shut down
-- [ ] Main binary
-    - [ ] Run HTTP server
+    - [x] Make a single route for inference to the model
+    - [x] Start the HTTP server
+    - [x] HTTP server has a ResourceAllocator and will call RA methods to spin up/shut down
+- [x] Main binary
+    - [x] Run HTTP server
 - [ ] Benchmarking suite
     - [ ] Schedule maker
     - [ ] Request schedule executor
     - [ ] Capture metrics / statistics
-- [ ] Write final paper
+- [ ] Write final paper report
 
 ## Loading and running torch
 [Source](https://github.com/LaurentMazare/tch-rs/blob/main/examples/jit/README.md)
