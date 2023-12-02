@@ -9,7 +9,7 @@ Distributed and automatic ML model deployment at scale
     - [ ] semantic segmentation
         - [ ] deeplab v3
     - [ ] object detection
-        - [ ] faster -CNN
+        - [ ] faster R-CNN
     - [ ] transformer
         - [ ] huggingface roberta exported to torchscript ([see this](https://huggingface.co/docs/transformers/torchscript))
 - [x] Pytorch loading

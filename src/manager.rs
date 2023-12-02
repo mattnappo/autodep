@@ -10,7 +10,7 @@ use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
-use log::{debug, info};
+use log::{debug, info, warn};
 use nix::{sys::signal, unistd};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -29,28 +29,6 @@ pub struct Handle {
     #[serde(skip_serializing)]
     pub conn: Option<WorkerClient<Channel>>,
 }
-
-impl std::fmt::Debug for Handle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
-    }
-}
-
-impl std::hash::Hash for Handle {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        // Skip hashing the conn
-        (&self.port, &self.pid).hash(state);
-    }
-}
-impl PartialEq for Handle {
-    fn eq(&self, other: &Self) -> bool {
-        self.port == other.port && self.pid == other.pid
-    }
-}
-impl Eq for Handle {}
 
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
@@ -104,7 +82,7 @@ impl Manager {
             conn: Some(client),
         };
 
-        info!(
+        warn!(
             "manager started a new worker on (port = {}, pid = {})",
             port, pid
         );
@@ -177,6 +155,18 @@ impl Manager {
         Ok(map)
     }
 
+    /// Return all the workers, without their status
+    pub fn all_workers(&mut self) -> Vec<Handle> {
+        self.workers
+            .values()
+            .map(|w| Handle {
+                pid: w.pid,
+                port: w.port,
+                conn: None,
+            })
+            .collect()
+    }
+
     /// Start a new worker process on the local machine and connect to it
     pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
         let mut stream = tokio_stream::iter(0..n);
@@ -204,3 +194,25 @@ impl Manager {
         }
     }
 }
+
+impl std::fmt::Debug for Handle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
+    }
+}
+
+impl std::hash::Hash for Handle {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        // Skip hashing the conn
+        (&self.port, &self.pid).hash(state);
+    }
+}
+impl PartialEq for Handle {
+    fn eq(&self, other: &Self) -> bool {
+        self.port == other.port && self.pid == other.pid
+    }
+}
+impl Eq for Handle {}
