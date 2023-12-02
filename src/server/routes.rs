@@ -27,7 +27,7 @@ type Result<T> = std::result::Result<T, WebError>;
 #[post("/image_inference")]
 pub async fn image_inference(
     req: web::Json<protocol::B64Image>,
-    state: web::Data<Server>,
+    state: web::Data<Mutex<Server>>,
 ) -> Result<impl Responder> {
     // Get input from request
     let input = {
@@ -39,7 +39,8 @@ pub async fn image_inference(
     };
 
     // Tell the manager to compute inference
-    let manager = state.manager.lock().unwrap();
+    let manager = state.lock().unwrap();
+    let manager = (*manager).manager.lock().unwrap();
     let output = manager.run_inference(input).await.unwrap();
 
     Ok(web::Json(output))

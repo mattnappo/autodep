@@ -30,7 +30,6 @@ async fn main() -> io::Result<()> {
     let (model, port) = get_args();
 
     let server = web::Data::new(Mutex::new(server::Server::new(model.clone()).unwrap()));
-    //let server = ;
 
     // Start the HTTP server
     HttpServer::new(move || {
