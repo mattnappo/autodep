@@ -22,7 +22,7 @@ fn get_args() -> (String, u16) {
 async fn main() -> io::Result<()> {
     env::set_var(
         "RUST_LOG",
-        "h2=warn,autodep=debug,actix_web=debug,actix_server=info",
+        "h2=warn,worker=debug,autodep=debug,actix_web=debug,actix_server=info",
     );
     //env::set_var("RUST_LOG", "debug");
     env_logger::init();

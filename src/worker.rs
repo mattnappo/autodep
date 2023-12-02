@@ -6,9 +6,10 @@ use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
 use crate::torch;
 use anyhow::anyhow;
 use anyhow::Result;
-use log::{debug, info};
+use log::{debug, error, info, warn};
 use serde::Serialize;
-use std::sync::Mutex;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 use tonic::transport::Server;
 use tonic::{Request, Response};
 
@@ -36,8 +37,8 @@ impl From<Status> for WorkerStatus {
             0 => WorkerStatus::Working,
             1 => WorkerStatus::Idle,
             2 => WorkerStatus::ShuttingDown,
-            3 => WorkerStatus::Error,
-            _ => unreachable!(),
+            3 | _ => WorkerStatus::Error,
+            //_ => unreachable!(),
         }
     }
 }
@@ -48,7 +49,7 @@ impl From<Status> for WorkerStatus {
 #[derive(Debug)]
 pub struct Worker {
     model: torch::TorchModel,
-    status: Mutex<WorkerStatus>,
+    status: Arc<Mutex<WorkerStatus>>,
     port: u16,
 }
 
@@ -56,7 +57,7 @@ impl Worker {
     pub fn new(model_file: String, port: u16) -> Result<Self> {
         Ok(Worker {
             model: torch::TorchModel::new(model_file)?,
-            status: Mutex::new(WorkerStatus::Idle),
+            status: Arc::new(Mutex::new(WorkerStatus::Idle)),
             port,
         })
     }
@@ -73,10 +74,12 @@ impl Worker {
         Ok(())
     }
 
+    /*
     /// Return the worker's status
     pub fn status(&self) -> WorkerStatus {
         (*self.status.lock().unwrap()).clone()
     }
+    */
 
     /// Run inference on the worker
     pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
@@ -97,7 +100,7 @@ impl worker_server::Worker for Worker {
         &self,
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
-        info!("got inference request");
+        info!("got inference request:");
         let image: torch::InputData = _request.into_inner().into();
 
         let output = self.run(image).unwrap();
@@ -105,9 +108,12 @@ impl worker_server::Worker for Worker {
     }
 
     async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
-        info!("got status request");
-        let status = self.status() as i32;
-        Ok(Response::new(Status { status }))
+        info!("got status request:");
+
+        let status = self.status.lock().unwrap();
+        Ok(Response::new(Status {
+            status: status.clone() as i32,
+        }))
     }
 
     // DEPRECATED

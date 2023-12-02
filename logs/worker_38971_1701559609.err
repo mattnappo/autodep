@@ -1,0 +1,37 @@
+[2023-12-02T23:26:50Z INFO  autodep::worker] starting new worker on port 38971 with model TorchModel { filename: "./models/resnet18.pt", model: CModule { c_module: 0x562ec3a90e30 } }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_write] send frame=Settings { flags: (0x0), initial_window_size: 1048576, max_frame_size: 16384, max_header_list_size: 16777216 }
+[2023-12-02T23:26:50Z DEBUG h2::proto::connection] Connection; peer=Server
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_read] received frame=Settings { flags: (0x0), enable_push: 0, initial_window_size: 2097152, max_frame_size: 16384 }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_write] send frame=Settings { flags: (0x1: ACK) }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_read] received frame=WindowUpdate { stream_id: StreamId(0), size_increment: 5177345 }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_write] send frame=WindowUpdate { stream_id: StreamId(0), size_increment: 983041 }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_read] received frame=Settings { flags: (0x1: ACK) }
+[2023-12-02T23:26:50Z DEBUG h2::proto::settings] received settings ACK; applying Settings { flags: (0x0), initial_window_size: 1048576, max_frame_size: 16384, max_header_list_size: 16777216 }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_read] received frame=Headers { stream_id: StreamId(1), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(1) }
+[2023-12-02T23:26:50Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(1), flags: (0x1: END_STREAM) }
+[2023-12-02T23:26:50Z INFO  autodep::worker] got inference request
+[2023-12-02T23:26:51Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(1), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:26:51Z DEBUG h2::codec::framed_write] send frame=Data { stream_id: StreamId(1) }
+[2023-12-02T23:26:51Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(1), flags: (0x5: END_HEADERS | END_STREAM) }
+[2023-12-02T23:26:55Z DEBUG h2::codec::framed_read] received frame=Headers { stream_id: StreamId(3), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:26:55Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(3) }
+[2023-12-02T23:26:55Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(3), flags: (0x1: END_STREAM) }
+[2023-12-02T23:26:55Z INFO  autodep::worker] got status request
+[2023-12-02T23:26:55Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(3), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:26:55Z DEBUG h2::codec::framed_write] send frame=Data { stream_id: StreamId(3) }
+[2023-12-02T23:26:55Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(3), flags: (0x5: END_HEADERS | END_STREAM) }
+[2023-12-02T23:26:56Z DEBUG h2::codec::framed_read] received frame=Headers { stream_id: StreamId(5), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:26:56Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(5) }
+[2023-12-02T23:26:56Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(5), flags: (0x1: END_STREAM) }
+[2023-12-02T23:26:56Z INFO  autodep::worker] got status request
+[2023-12-02T23:26:56Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(5), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:26:56Z DEBUG h2::codec::framed_write] send frame=Data { stream_id: StreamId(5) }
+[2023-12-02T23:26:56Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(5), flags: (0x5: END_HEADERS | END_STREAM) }
+[2023-12-02T23:31:11Z DEBUG h2::codec::framed_read] received frame=Headers { stream_id: StreamId(7), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:31:11Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(7) }
+[2023-12-02T23:31:11Z DEBUG h2::codec::framed_read] received frame=Data { stream_id: StreamId(7), flags: (0x1: END_STREAM) }
+[2023-12-02T23:31:11Z INFO  autodep::worker] got status request
+[2023-12-02T23:31:11Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(7), flags: (0x4: END_HEADERS) }
+[2023-12-02T23:31:11Z DEBUG h2::codec::framed_write] send frame=Data { stream_id: StreamId(7) }
+[2023-12-02T23:31:11Z DEBUG h2::codec::framed_write] send frame=Headers { stream_id: StreamId(7), flags: (0x5: END_HEADERS | END_STREAM) }

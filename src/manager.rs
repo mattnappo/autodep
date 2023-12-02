@@ -14,7 +14,8 @@ use log::{debug, error, info, warn};
 use nix::{sys::signal, unistd};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::process::Command;
+use std::fs::File;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -73,9 +74,18 @@ impl Manager {
         // Start a new local worker process
         let command = format!("{} {}", port, self.model_file);
         let args = command.split(' ').map(|n| n.to_string());
+
+        let t = util::time();
+        let out_name = format!("./logs/worker_{}_{}.out", port, t);
+        let err_name = format!("./logs/worker_{}_{}.err", port, t);
+        let out_log = File::create(out_name).expect("failed to open log");
+        let err_log = File::create(err_name).expect("failed to open log");
+
         let pid = Command::new(WORKER_BINARY)
-            .env("RUST_LOG", "autodep=debug")
+            .env("RUST_LOG", "debug,worker=debug,autodep=debug")
             .args(args)
+            .stdout(out_log)
+            .stderr(err_log)
             .spawn()
             .unwrap()
             .id();
@@ -161,8 +171,12 @@ impl Manager {
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
             let res = conn.unwrap().get_status(req).await?.into_inner();
+            //map.insert(handle.clone(), res.into());
+            debug!("got single status res: {res:?}");
             map.insert(handle.clone(), res.into());
         }
+
+        error!("THE MAP IS: {map:?}");
 
         Ok(map)
     }

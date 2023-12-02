@@ -61,7 +61,6 @@ pub async fn worker_status(
     match status {
         Ok(s) => Ok(web::Json(protocol::AllStatusResponse(s))),
         Err(e) => Err(WebError { err: e }),
-        //Err(e) => Ok(web::Json("some error lol".to_string())),
     }
 }
 

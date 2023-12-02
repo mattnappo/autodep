@@ -9,7 +9,7 @@ const USAGE: &str = "usage: ./worker <port> <model file> ";
 #[tokio::main]
 async fn main() {
     init_libtorch();
-    std::env::set_var("RUST_LOG", "debug");
+    std::env::set_var("RUST_LOG", "debug,worker=debug");
     env_logger::init();
 
     let args: Vec<String> = env::args().collect();
