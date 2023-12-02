@@ -18,6 +18,7 @@ use base64::{
     Engine as _,
 };
 use log::debug;
+use log::warn;
 use std::sync::Mutex;
 
 type Result<T> = std::result::Result<T, WebError>;
@@ -64,5 +65,6 @@ pub async fn worker_status(_req: HttpRequest, state: web::Data<Server>) -> Resul
 pub async fn workers(_req: HttpRequest, state: web::Data<Server>) -> impl Responder {
     let mut manager = state.manager.lock().unwrap();
     let workers = manager.all_workers();
+    warn!("Workers: {workers:#?}");
     web::Json(workers)
 }

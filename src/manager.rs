@@ -15,6 +15,8 @@ use nix::{sys::signal, unistd};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::{thread, time};
 use tch::IndexOp;
 use tokio_stream::StreamExt;
@@ -30,11 +32,33 @@ pub struct Handle {
     pub conn: Option<WorkerClient<Channel>>,
 }
 
+impl std::fmt::Debug for Handle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
+    }
+}
+
+impl std::hash::Hash for Handle {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        // Skip hashing the conn
+        (&self.port, &self.pid).hash(state);
+    }
+}
+impl PartialEq for Handle {
+    fn eq(&self, other: &Self) -> bool {
+        self.port == other.port && self.pid == other.pid
+    }
+}
+impl Eq for Handle {}
+
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
-    workers: HashMap<u32, Handle>,
+    workers: Arc<RwLock<HashMap<u32, Handle>>>,
 
     /// The path to the TorchScript model file
     model_file: String,
@@ -43,14 +67,15 @@ pub struct Manager {
 impl Manager {
     pub fn new(model_file: String) -> Self {
         Manager {
-            workers: HashMap::new(),
+            workers: Arc::new(RwLock::new(HashMap::new())),
             model_file,
         }
     }
 
     /// Start a new worker process on the local machine and connect to it
     async fn start_new_worker(&mut self) -> Result<()> {
-        if self.workers.len() + 1 >= config::MAX_WORKERS {
+        let mut workers = (*self.workers).write().unwrap();
+        if workers.len() + 1 >= config::MAX_WORKERS {
             return Err(anyhow!(
                 "maximum number of workers exceeded. cannot allocate any more",
             ));
@@ -87,13 +112,16 @@ impl Manager {
             port, pid
         );
 
-        self.workers.insert(handle.pid, handle);
+        //workers.insert(handle.pid, handle);
+        workers.insert(handle.pid, handle);
+        warn!("upon add: {workers:?}");
         Ok(())
     }
 
     /// Find an idle worker
     async fn find_idle_worker(&self) -> Result<Option<Handle>> {
-        let mut handles = tokio_stream::iter(self.workers.values());
+        let workers = (*self.workers).read().unwrap();
+        let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
@@ -143,7 +171,9 @@ impl Manager {
     pub async fn all_status(&mut self) -> Result<HashMap<Handle, WorkerStatus>> {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
 
-        let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
+        let workers = self.workers.read().unwrap();
+        //let mut handles = tokio_stream::iter(workers.values().collect::<Vec<&Handle>>());
+        let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
             debug!("getting status of worker pid {}", handle.pid);
             let conn = handle.conn.clone();
@@ -157,7 +187,9 @@ impl Manager {
 
     /// Return all the workers, without their status
     pub fn all_workers(&mut self) -> Vec<Handle> {
-        self.workers
+        let workers = self.workers.read().unwrap();
+        warn!("WORKERS INTERNAL: {:#?}", workers.values());
+        workers
             .values()
             .map(|w| Handle {
                 pid: w.pid,
@@ -184,7 +216,8 @@ impl Manager {
             Some(h) => {
                 let pid = h.pid;
                 // Remove it from the worker store
-                let handle = self.workers.remove(&pid).unwrap();
+                let mut workers = self.workers.write().unwrap();
+                let handle = workers.remove(&pid).unwrap();
                 // Kill the process
                 signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
                 Ok(handle)
@@ -194,25 +227,3 @@ impl Manager {
         }
     }
 }
-
-impl std::fmt::Debug for Handle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Handle {{ port: {}, pid: {} }}", self.port, self.pid)
-    }
-}
-
-impl std::hash::Hash for Handle {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        // Skip hashing the conn
-        (&self.port, &self.pid).hash(state);
-    }
-}
-impl PartialEq for Handle {
-    fn eq(&self, other: &Self) -> bool {
-        self.port == other.port && self.pid == other.pid
-    }
-}
-impl Eq for Handle {}
