@@ -24,6 +24,9 @@ pub mod config {
     /// in ms
     pub const WORKER_TIMEOUT: u128 = 2000;
 
+    /// Spot workers are one-time-use workers
+    pub const SPOT_WORKERS: bool = true;
+
     pub const RUST_LOG: &str =
         "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
 

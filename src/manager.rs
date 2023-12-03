@@ -119,8 +119,9 @@ impl Manager {
         Ok(handle)
     }
 
-    /// Find an idle worker
-    async fn find_idle_worker(&self) -> Result<Option<Handle>> {
+    /// Get a handle to an idle worker, or start a new worker if no workers are currently idle
+    async fn get_idle_worker(&mut self) -> Result<Handle> {
+        // Loop through all registered workers and return the first idle one
         let mut handles = tokio_stream::iter(self.workers.values());
         while let Some(handle) = handles.next().await {
             let req = Request::new(rpc::Empty {});
@@ -132,11 +133,17 @@ impl Manager {
                 .into_inner()
                 .into();
             match res {
-                WorkerStatus::Idle => return Ok(Some(handle.clone())),
+                WorkerStatus::Idle => {
+                    info!("found an idle worker: no need for a new worker");
+                    return Ok(handle.clone());
+                }
                 _ => continue,
             }
         }
-        Ok(None)
+
+        // If there are no idle workers, make a new worker (guaranteed to be idle)
+        info!("all workers are busy: attempting to start a new worker");
+        self.start_new_worker().await
     }
 
     // ----- Interface ----- //
@@ -144,33 +151,18 @@ impl Manager {
     /// Run inference on an idle worker
     pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
         // Find an idle worker
-        if let Some(handle) = self.find_idle_worker().await? {
-            info!("handling inference request without starting a new worker");
-            // Send req
-            let req = Request::new(input.into());
-            let res = handle
-                .conn
-                .clone()
-                .image_inference(req)
-                .await?
-                .into_inner()
-                .into();
-            Ok(res)
-        } else {
-            // If there is not currently an idle worker, then spawn a new worker
-            info!("all workers are busy: attempting to start a new worker");
-            let handle = self.start_new_worker().await?;
-            // Send req
-            let req = Request::new(input.into());
-            let res = handle
-                .conn
-                .clone()
-                .image_inference(req)
-                .await?
-                .into_inner()
-                .into();
-            Ok(res)
-        }
+        let handle = self.get_idle_worker().await?;
+        info!("handling inference request without starting a new worker");
+        // Send req
+        let req = Request::new(input.into());
+        let res = handle
+            .conn
+            .clone()
+            .image_inference(req)
+            .await?
+            .into_inner()
+            .into();
+        Ok(res)
     }
 
     /// Get the statuses of all workers
@@ -216,19 +208,13 @@ impl Manager {
     /// Kill an idle worker and return a partial handle to it
     pub async fn kill_worker(&mut self) -> Result<Handle> {
         // Find an idle worker
-        match self.find_idle_worker().await? {
-            // If that worker exists, kill it
-            Some(h) => {
-                let pid = h.pid;
-                // Remove it from the worker store
-                let handle = self.workers.remove(&pid).unwrap();
-                // Kill the process
-                signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
-                Ok(handle)
-            }
-            // If not, return err
-            None => Err(anyhow!("no idle workers to kill")),
-        }
+        let handle = self.get_idle_worker().await?;
+        let pid = handle.pid;
+        // Remove it from the worker store
+        let handle = self.workers.remove(&pid).unwrap();
+        // Kill the process
+        signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
+        Ok(handle)
     }
 }
 

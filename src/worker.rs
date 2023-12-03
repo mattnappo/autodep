@@ -1,6 +1,7 @@
 //! An inference worker listens for requests from the `Manager` and computes
 //! model inference in an isolated environment
 
+use crate::config::*;
 use crate::rpc::worker_server::{self, WorkerServer};
 use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
 use crate::torch;
@@ -115,8 +116,8 @@ impl worker_server::Worker for Worker {
         .await
         .unwrap();
 
-        // Change status back to Idle
-        {
+        // Change status back to Idle (if workers are not one-time-use)
+        if !SPOT_WORKERS {
             let mut s = status.lock().unwrap();
             *s = WorkerStatus::Idle;
         }
