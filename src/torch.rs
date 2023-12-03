@@ -7,7 +7,7 @@ use serde::Serialize;
 use tch::vision::imagenet;
 
 /// An in-memory representation of an image. Can be the input or output of a model
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Image {
     pub(crate) image: Vec<u8>,
     pub(crate) height: Option<u32>,
@@ -31,7 +31,7 @@ pub enum Inference {
 }
 
 /// Input data that inference can be computed on
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InputData {
     Text(String),
     //Image(Image),

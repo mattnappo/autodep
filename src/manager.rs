@@ -41,7 +41,7 @@ pub struct Manager {
     /// Map from PID to `Handle`s of current workers
     //workers: Arc<RwLock<HashMap<u32, Handle>>>,
     //workers: Arc<Mutex<HashMap<u32, Handle>>>,
-    workers: HashMap<u32, Handle>,
+    workers: HashMap<u32, (Handle, WorkerStatus)>,
 
     /// The path to the TorchScript model file
     model_file: String,
@@ -70,74 +70,122 @@ impl Manager {
 
         debug!("found free port {port}");
 
-        // Start a new local worker process
-        let command = format!("{} {}", port, self.model_file);
-        let args = command.split(' ').map(|n| n.to_string());
+        let model_file = self.model_file.clone();
 
-        let t = util::time();
-        let out_name = format!("./logs/worker_{}_{}.out", port, t);
-        let err_name = format!("./logs/worker_{}_{}.err", port, t);
-        let out_log = File::create(out_name).expect("failed to open log");
-        let err_log = File::create(err_name).expect("failed to open log");
+        // Start a new thread to spawn a new process
+        let pid = tokio::task::spawn(async move {
+            // Start a new local worker process
+            let command = format!("{} {}", port, model_file);
+            let args = command.split(' ').map(|n| n.to_string());
 
-        let pid = Command::new(WORKER_BINARY)
-            .env("RUST_LOG", RUST_LOG)
-            .args(args)
-            .stdout(out_log)
-            .stderr(err_log)
-            .spawn()
-            .unwrap()
-            .id();
+            let t = util::time();
+            let out_name = format!("./logs/worker_{}_{}.out", port, t);
+            let err_name = format!("./logs/worker_{}_{}.err", port, t);
+            let out_log = File::create(out_name).expect("failed to open log");
+            let err_log = File::create(err_name).expect("failed to open log");
 
-        info!("manager started new worker process {pid}");
+            let pid = Command::new(WORKER_BINARY)
+                .env("RUST_LOG", RUST_LOG)
+                .args(args)
+                .stdout(out_log)
+                .stderr(err_log)
+                .spawn()
+                .unwrap()
+                .id();
 
-        // Spin until connection succeeds, or times out
-        let conn: Connection;
-        let now = time::Instant::now();
-        loop {
-            // Connect to the new local worker
-            match WorkerClient::connect(format!("http://[::1]:{port}")).await {
-                Ok(c) => {
-                    conn = c;
-                    break;
-                }
-                Err(_) => {
-                    if now.elapsed().as_millis() >= WORKER_TIMEOUT {
-                        return Err(anyhow!("timeout connecting to new worker process"));
+            info!("manager started new worker process {pid}");
+
+            // Spin until connection succeeds, or times out
+            let now = time::Instant::now();
+            loop {
+                // Connect to the new local worker
+                match WorkerClient::connect(format!("http://[::1]:{port}")).await {
+                    Ok(conn) => return Ok(pid),
+                    Err(_) => {
+                        if now.elapsed().as_millis() >= WORKER_TIMEOUT {
+                            return Err(anyhow!("timeout connecting to new worker process"));
+                        }
+                        //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        // sleep for 100 ms
                     }
                 }
             }
+        })
+        .await
+        .unwrap()
+        .unwrap();
+
+        /*
+        tokio::task::spawn(async move {
+            // Spin until connection succeeds, or times out
+            let now = time::Instant::now();
+            loop {
+                // Connect to the new local worker
+                match WorkerClient::connect(format!("http://[::1]:{port}")).await {
+                    Ok(conn) => return Ok(()),
+                    Err(_) => {
+                        if now.elapsed().as_millis() >= WORKER_TIMEOUT {
+                            return Err(anyhow!("timeout connecting to new worker process"));
+                        }
+                        //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        // sleep for 100 ms
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        */
+
+        /*
+        use tokio::time::{timeout, Duration};
+
+        // Try to connect to the new local worker with a timeout
+        let connect_future = WorkerClient::connect(format!("http://[::1]:{port}"));
+        let timeout_duration = Duration::from_millis(WORKER_TIMEOUT as u64);
+        match timeout(timeout_duration, connect_future).await {
+            Ok(Ok(_)) => {
+                // Connection succeeded
+            }
+            Ok(Err(e)) => {
+                // Connection failed
+                return Err(anyhow!("failed to connect to new worker process: {}", e));
+            }
+            Err(_) => {
+                // Timeout
+                return Err(anyhow!("timeout connecting to new worker process"));
+            }
         }
+        */
 
         let handle = Handle { port, pid };
 
         info!("manager successfully connected to new worker (port = {port}, pid = {pid})",);
 
-        self.workers.insert(handle.pid, handle.clone());
+        self.workers
+            .insert(handle.pid, (handle.clone(), WorkerStatus::Idle));
         Ok(handle)
     }
 
     /// Get a handle to an idle worker, or start a new worker if no workers are currently idle
     async fn get_idle_worker(&mut self) -> Result<Handle> {
         // Loop through all registered workers and return the first idle one
-        let mut handles = tokio_stream::iter(self.workers.values());
-        while let Some(handle) = handles.next().await {
-            let req = Request::new(rpc::Empty {});
-            // Reconnent and send request
-            let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
-            let res: WorkerStatus = conn.get_status(req).await?.into_inner().into();
-            match res {
-                WorkerStatus::Idle => {
-                    info!("found an idle worker: no need for a new worker");
-                    return Ok(handle.clone());
-                }
-                _ => continue,
+        match self
+            .workers
+            .values()
+            .filter(|&(_, s)| s.clone() == WorkerStatus::Idle)
+            .map(|(handle, _)| handle.clone())
+            .collect::<Vec<Handle>>()
+            .first()
+        {
+            Some(worker) => Ok(worker.clone()),
+            None => {
+                // If there are no idle workers, make a new worker (guaranteed to be idle)
+                info!("all workers are busy: attempting to start a new worker");
+                self.start_new_worker().await
             }
         }
-
-        // If there are no idle workers, make a new worker (guaranteed to be idle)
-        info!("all workers are busy: attempting to start a new worker");
-        self.start_new_worker().await
     }
 
     // ----- Interface ----- //
@@ -154,30 +202,22 @@ impl Manager {
         // Reconnent to the RPC client
         let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
 
+        // Mark worker as busy
+        self.workers
+            .insert(handle.pid, (handle.clone(), WorkerStatus::Working));
         // Send an RPC request for inference
         let res = conn.image_inference(req).await?.into_inner().into();
         // Ok(Inference::Text("some inference".to_string()))
+        if !SPOT_WORKERS {
+            self.workers
+                .insert(handle.pid, (handle, WorkerStatus::Idle));
+        }
         Ok(res)
     }
 
     /// Get the statuses of all workers
     pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
-        let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
-
-        //let mut handles = tokio_stream::iter(workers.values().collect::<Vec<&Handle>>());
-        let mut handles = tokio_stream::iter(self.workers.values());
-        while let Some(handle) = handles.next().await {
-            debug!("sending status request to worker pid = {}", handle.pid);
-            let req = Request::new(rpc::Empty {});
-
-            // Reconnect to the worker
-            let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
-            let res = conn.get_status(req).await?.into_inner();
-            debug!("got status of worker: {res:?}");
-            map.insert(handle.clone(), res.into());
-        }
-
-        Ok(map)
+        Ok(self.workers.iter().map(|(_, v)| v.clone()).collect())
     }
 
     // idea: the Manager is being cloned in the data part of the actix framework
@@ -186,7 +226,7 @@ impl Manager {
     pub fn all_workers(&self) -> Vec<Handle> {
         self.workers
             .values()
-            .map(|w| Handle {
+            .map(|(w, _)| Handle {
                 pid: w.pid,
                 port: w.port,
             })
@@ -208,7 +248,7 @@ impl Manager {
         let handle = self.get_idle_worker().await?;
         let pid = handle.pid;
         // Remove it from the worker store
-        let handle = self.workers.remove(&pid).unwrap();
+        let (handle, _) = self.workers.remove(&pid).unwrap();
         // Kill the process
         signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
         Ok(handle)

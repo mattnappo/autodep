@@ -3,8 +3,9 @@
 
 use crate::config::*;
 use crate::rpc::worker_server::{self, WorkerServer};
-use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
-use crate::torch;
+use crate::rpc::{ClassOutput, Classification, Empty, ImageInput};
+use crate::torch::{self, Class};
+use crate::util;
 use anyhow::anyhow;
 use anyhow::Result;
 use log::{debug, error, info, warn};
@@ -17,7 +18,7 @@ use tonic::{Request, Response};
 type TResult<T> = Result<T, tonic::Status>;
 
 /// The current status of a worker
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum WorkerStatus {
     /// Currently computing inference
     Working = 0,
@@ -32,34 +33,23 @@ pub enum WorkerStatus {
     Error,
 }
 
-impl From<Status> for WorkerStatus {
-    fn from(s: Status) -> Self {
-        match s.status {
-            0 => WorkerStatus::Working,
-            1 => WorkerStatus::Idle,
-            2 => WorkerStatus::ShuttingDown,
-            3 | _ => WorkerStatus::Error,
-            //_ => unreachable!(),
-        }
-    }
-}
-
 /// A worker runs as a separate process, spawned by the resource manager.
 /// A worker runs an RPC server listening for requests to compute inference
 /// on its own local copy of the model
 #[derive(Debug)]
 pub struct Worker {
     model: Arc<torch::TorchModel>,
-    status: Arc<Mutex<WorkerStatus>>,
     port: u16,
+
+    test_image: Arc<Mutex<torch::InputData>>,
 }
 
 impl Worker {
     pub fn new(model_file: String, port: u16) -> Result<Self> {
         Ok(Worker {
             model: Arc::new(torch::TorchModel::new(model_file)?),
-            status: Arc::new(Mutex::new(WorkerStatus::Idle)),
             port,
+            test_image: Arc::new(Mutex::new(util::test::get_test_image())),
         })
     }
 
@@ -90,6 +80,7 @@ impl Worker {
 
 #[tonic::async_trait]
 impl worker_server::Worker for Worker {
+    /*
     async fn image_inference(
         &self,
         _request: Request<ImageInput>,
@@ -98,13 +89,6 @@ impl worker_server::Worker for Worker {
         let image: torch::InputData = _request.into_inner().into();
 
         let model = self.model.clone();
-        let status = self.status.clone();
-
-        // Mark worker as busy
-        {
-            let mut s = status.lock().unwrap();
-            *s = WorkerStatus::Working;
-        }
 
         //actix_web::rt::time::sleep(std::time::Duration::from_millis(4000)).await;
 
@@ -116,53 +100,48 @@ impl worker_server::Worker for Worker {
         .await
         .unwrap();
 
-        // Change status back to Idle (if workers are not one-time-use)
-        if !SPOT_WORKERS {
-            let mut s = status.lock().unwrap();
-            *s = WorkerStatus::Idle;
-        }
-
-        /*
-        let output = ClassOutput {
-            classes: vec![],
-            num_classes: 919,
-        };
-        */
-
         info!("worker successfully computed inference: {output:?}");
         Ok(Response::new(output.unwrap().into()))
     }
+    */
 
-    /*
     async fn image_inference(
         &self,
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
         info!("worker got FAKE inference request");
 
-        let output = ClassOutput {
-            classes: vec![],
+        /*
+        let output = actix_web::rt::task::spawn_blocking(move || ClassOutput {
+            classes: vec![Classification {
+                probability: 0.4,
+                class_int: 3,
+                label: "book".to_string(),
+            }],
             num_classes: 919,
-        };
+        })
+        .await
+        .unwrap();
+        */
+
+        let img = self.test_image.clone();
+        let model = self.model.clone();
+
+        let output = tokio::task::spawn(async move {
+            let i = img.lock().unwrap();
+            let output = model.run(i.clone()).unwrap();
+            output
+        })
+        .await
+        .unwrap();
 
         info!("worker successfully FAKED inference: {output:?}");
         return Ok(Response::new(output.into()));
-    }
-        */
-
-    async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
-        info!("worker got status request");
-        let status = self.status.lock().unwrap();
-        Ok(Response::new(Status {
-            status: status.clone() as i32,
-        }))
     }
 
     // DEPRECATED
     async fn shutdown(&self, _request: Request<Empty>) -> TResult<Response<Empty>> {
         info!("worker got shutdown request");
-        let mut g = self.status.lock().unwrap();
-        *g = WorkerStatus::ShuttingDown;
         Ok(Response::new(Empty {}))
     }
 }

@@ -3,7 +3,7 @@
 use autodep::config::*;
 use autodep::util::init_libtorch;
 use autodep::worker::Worker;
-use std::{env, process};
+use std::{env, fs, process};
 
 const USAGE: &str = "usage: ./worker <port> <model file> ";
 
@@ -23,4 +23,6 @@ async fn main() {
     let model = args[2].clone();
     let worker = Worker::new(model, port).unwrap();
     worker.start().await.unwrap();
+
+    fs::write(format!("./tmp/{port}_ready"), "").unwrap();
 }

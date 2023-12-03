@@ -22,7 +22,7 @@ pub mod config {
     pub const MAX_WORKERS: usize = 20;
 
     /// in ms
-    pub const WORKER_TIMEOUT: u128 = 2000;
+    pub const WORKER_TIMEOUT: u128 = 700;
 
     /// Spot workers are one-time-use workers
     pub const SPOT_WORKERS: bool = false;
