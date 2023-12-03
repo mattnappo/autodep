@@ -11,6 +11,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response};
 use tracing::*;
@@ -62,7 +63,12 @@ impl Worker {
         );
         let addr = format!("[::1]:{}", self.port).parse().unwrap();
         let svc = WorkerServer::new(self);
-        Server::builder().add_service(svc).serve(addr).await?;
+        Server::builder()
+            .tcp_keepalive(Some(Duration::from_millis(1000)))
+            .concurrency_limit_per_connection(32)
+            .add_service(svc)
+            .serve(addr)
+            .await?;
         Ok(())
     }
 

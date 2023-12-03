@@ -64,13 +64,23 @@ pub struct Manager {
     /// Map from PID to `Handle`s of current workers
     //workers: Arc<RwLock<HashMap<u32, Handle>>>,
     //workers: Arc<Mutex<HashMap<u32, Handle>>>,
-    workers: HashMap<u32, (Handle, WorkerStatus)>,
+    pub workers: HashMap<u32, (Handle, WorkerStatus)>,
 
     /// The path to the TorchScript model file
     model_file: String,
 }
 
 impl Manager {
+    // should these be atomic?
+    pub fn mark_working(&mut self, pid: u32) {
+        let (h, _) = self.workers.get(&pid).unwrap();
+        self.workers.insert(pid, (h.clone(), WorkerStatus::Working));
+    }
+    pub fn mark_idle(&mut self, pid: u32) {
+        let (h, _) = self.workers.get(&pid).unwrap();
+        self.workers.insert(pid, (h.clone(), WorkerStatus::Idle));
+    }
+
     pub async fn new(model_file: String) -> Result<Self> {
         let mut m = Manager {
             //workers: Arc::new(RwLock::new(HashMap::new())),

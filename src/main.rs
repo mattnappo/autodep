@@ -3,6 +3,7 @@ use autodep::config::RUST_LOG;
 use autodep::manager::Manager;
 use autodep::server::{self, routes};
 use autodep::util::init_libtorch;
+use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
 use std::{env, io, process};
 
@@ -36,7 +37,7 @@ async fn main() -> io::Result<()> {
 
     let (model, port) = get_args();
 
-    let manager = web::Data::new(Mutex::new(Manager::new(model.clone()).await.unwrap()));
+    let manager = web::Data::new(RwLock::new(Manager::new(model.clone()).await.unwrap()));
 
     // Start the HTTP server
     HttpServer::new(move || {
