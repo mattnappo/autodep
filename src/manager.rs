@@ -25,13 +25,15 @@ use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::{Request, Response};
 
+type Connection = WorkerClient<Channel>;
+
 /// A handle to a worker
 #[derive(Clone, Serialize)]
 pub struct Handle {
     pub port: u16,
     pub pid: u32,
     #[serde(skip_serializing)]
-    pub conn: Option<WorkerClient<Channel>>,
+    pub conn: Connection,
 }
 
 /// The worker manager. Right now, assumes that all workers
@@ -86,27 +88,31 @@ impl Manager {
             .unwrap()
             .id();
 
-        // Wait for the local process to start
-        std::thread::sleep(time::Duration::from_millis(1000));
+        info!("manager started new worker process {pid}");
 
-        // Connect to the new local worker
-        let client = WorkerClient::connect(format!("http://[::1]:{port}")).await?;
+        // Spin until connection succeeds, or times out
+        let conn: Connection;
+        let now = time::Instant::now();
+        loop {
+            // Connect to the new local worker
+            match WorkerClient::connect(format!("http://[::1]:{port}")).await {
+                Ok(c) => {
+                    conn = c;
+                    break;
+                }
+                Err(_) => {
+                    if now.elapsed().as_millis() >= WORKER_TIMEOUT {
+                        return Err(anyhow!("timeout connecting to new worker process"));
+                    }
+                }
+            }
+        }
 
-        let handle = Handle {
-            port,
-            pid,
-            conn: Some(client),
-        };
+        let handle = Handle { port, pid, conn };
 
-        warn!(
-            "manager started a new worker on (port = {}, pid = {})",
-            port, pid
-        );
+        info!("manager successfully connected to new worker (port = {port}, pid = {pid})",);
 
-        //workers.insert(handle.pid, handle);
-        let x = workers.insert(handle.pid, handle.clone());
-        warn!("\tupon add: {workers:?}");
-        warn!("\tx is : {x:?}");
+        workers.insert(handle.pid, handle.clone());
         Ok(handle)
     }
 
@@ -115,9 +121,9 @@ impl Manager {
         let workers = self.workers.lock().unwrap();
         let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
-            let conn = handle.conn.clone();
+            let mut conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
-            let res: WorkerStatus = conn.unwrap().get_status(req).await?.into_inner().into();
+            let res: WorkerStatus = conn.get_status(req).await?.into_inner().into();
             match res {
                 WorkerStatus::Idle => return Ok(Some(handle.clone())),
                 _ => continue,
@@ -131,27 +137,20 @@ impl Manager {
     /// Run inference on an idle worker
     pub async fn run_inference(&self, input: InputData) -> Result<Inference> {
         // Find an idle worker
-        if let Some(handle) = self.find_idle_worker().await? {
-            match handle.conn {
-                Some(mut conn) => {
-                    let req = Request::new(input.into());
-                    let res = conn.image_inference(req).await?.into_inner().into();
-                    Ok(res)
-                }
-                None => todo!(), // Try to connect again
-            }
+        if let Some(mut handle) = self.find_idle_worker().await? {
+            info!("handling inference request without starting a new worker");
+            // Send req
+            let req = Request::new(input.into());
+            let res = handle.conn.image_inference(req).await?.into_inner().into();
+            Ok(res)
         } else {
-            let handle = self.start_new_worker().await?;
-            warn!("busy so created new handle: {handle:#?}");
-
-            match handle.conn {
-                Some(mut conn) => {
-                    let req = Request::new(input.into());
-                    let res = conn.image_inference(req).await?.into_inner().into();
-                    Ok(res)
-                }
-                None => todo!(), // Try to connect again
-            }
+            // If there is not currently an idle worker, then spawn a new worker
+            info!("all workers are busy: attempting to start a new worker");
+            let mut handle = self.start_new_worker().await?;
+            // Send req
+            let req = Request::new(input.into());
+            let res = handle.conn.image_inference(req).await?.into_inner().into();
+            Ok(res)
         }
     }
 
@@ -164,9 +163,9 @@ impl Manager {
         let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
             debug!("getting status of worker pid {}", handle.pid);
-            let conn = handle.conn.clone();
+            let mut conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
-            let res = conn.unwrap().get_status(req).await?.into_inner();
+            let res = conn.get_status(req).await?.into_inner();
             debug!("got single status res: {res:?}");
             map.insert(handle.clone(), res.into());
         }
@@ -179,13 +178,12 @@ impl Manager {
     /// Return all the workers, without their status
     pub fn all_workers(&self) -> Vec<Handle> {
         let workers = self.workers.lock().unwrap();
-        warn!("WORKERS INTERNAL: {:#?}", workers.values());
         workers
             .values()
             .map(|w| Handle {
                 pid: w.pid,
                 port: w.port,
-                conn: None,
+                conn: w.conn.clone(),
             })
             .collect()
     }

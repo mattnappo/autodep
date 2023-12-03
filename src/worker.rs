@@ -48,7 +48,7 @@ impl From<Status> for WorkerStatus {
 /// on its own local copy of the model
 #[derive(Debug)]
 pub struct Worker {
-    model: torch::TorchModel,
+    model: Arc<torch::TorchModel>,
     status: Arc<Mutex<WorkerStatus>>,
     port: u16,
 }
@@ -56,7 +56,7 @@ pub struct Worker {
 impl Worker {
     pub fn new(model_file: String, port: u16) -> Result<Self> {
         Ok(Worker {
-            model: torch::TorchModel::new(model_file)?,
+            model: Arc::new(torch::TorchModel::new(model_file)?),
             status: Arc::new(Mutex::new(WorkerStatus::Idle)),
             port,
         })
@@ -73,13 +73,6 @@ impl Worker {
         Server::builder().add_service(svc).serve(addr).await?;
         Ok(())
     }
-
-    /*
-    /// Return the worker's status
-    pub fn status(&self) -> WorkerStatus {
-        (*self.status.lock().unwrap()).clone()
-    }
-    */
 
     /// Run inference on the worker
     pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
@@ -100,16 +93,28 @@ impl worker_server::Worker for Worker {
         &self,
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
-        info!("got inference request:");
+        info!("worker got inference request");
         let image: torch::InputData = _request.into_inner().into();
 
-        let output = self.run(image).unwrap();
-        return Ok(Response::new(output.into()));
+        let model = self.model.clone();
+        let status = self.status.clone();
+
+        let output = actix_web::rt::task::spawn_blocking(move || {
+            let mut s = status.lock().unwrap();
+            *s = WorkerStatus::Working;
+            let res = model.run(image);
+            *s = WorkerStatus::Idle;
+            res
+        })
+        .await
+        .unwrap();
+
+        info!("worker successfully computed inference: {output:?}");
+        return Ok(Response::new(output.unwrap().into()));
     }
 
     async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
-        info!("got status request:");
-
+        info!("worker got status request");
         let status = self.status.lock().unwrap();
         Ok(Response::new(Status {
             status: status.clone() as i32,
@@ -118,7 +123,7 @@ impl worker_server::Worker for Worker {
 
     // DEPRECATED
     async fn shutdown(&self, _request: Request<Empty>) -> TResult<Response<Empty>> {
-        info!("got shutdown request");
+        info!("worker got shutdown request");
         let mut g = self.status.lock().unwrap();
         *g = WorkerStatus::ShuttingDown;
         Ok(Response::new(Empty {}))

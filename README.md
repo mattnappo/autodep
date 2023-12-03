@@ -87,3 +87,13 @@ Distributed and automatic ML model deployment at scale
 
 ## Idea
 -- remove second layer of ind to prevent deadlock in multithreade testing example
+
+
+## IMPORTANT
+The bug seems to only happen whenever it receives two inference requests at the same time.
+
+Seemingly can't handle a status request while inference is actually running (or, the sleep in the torch.run method is running)
+
+
+
+its not the model inference that takes a long time.... its the new process creator (500ms?)

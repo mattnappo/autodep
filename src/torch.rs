@@ -121,7 +121,7 @@ impl TorchModel {
     /// Right now this function is not very general, and is somewhat hardcoded
     /// for imagenet. Will circle back later
     pub fn run(&self, input: InputData) -> Result<Inference> {
-        //std::thread::sleep(std::time::Duration::from_millis(5000)); -- not working
+        //tokio::time::sleep(std::time::Duration::from_millis(5000)); // -- not working
         match input {
             InputData::Text(_) => todo!(),
             InputData::Image(image) => {

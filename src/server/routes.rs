@@ -40,7 +40,8 @@ pub async fn image_inference(
 
     // Tell the manager to compute inference
     let manager = state.lock().unwrap();
-    let output = manager.run_inference(input).await.unwrap();
+    let output = manager.run_inference(input).await?;
+    //actix_web::rt::task::spawn_blocking(move || manager.run_inference(input).await).await;
 
     Ok(web::Json(output))
 }
