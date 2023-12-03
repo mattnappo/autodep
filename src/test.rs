@@ -3,7 +3,7 @@ use autodep::manager;
 use autodep::util::init_libtorch;
 use autodep::util::test;
 use env_logger;
-use log::{debug, info, warn};
+use tracing::*;
 use std::{env, process};
 
 const USAGE: &str = "usage: ./autodep <model file>";

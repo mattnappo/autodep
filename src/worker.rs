@@ -8,12 +8,12 @@ use crate::torch::{self, Class};
 use crate::util;
 use anyhow::anyhow;
 use anyhow::Result;
-use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use tonic::transport::Server;
 use tonic::{Request, Response};
+use tracing::*;
 
 type TResult<T> = Result<T, tonic::Status>;
 
@@ -54,6 +54,7 @@ impl Worker {
     }
 
     /// Start listening for requests
+    #[tracing::instrument]
     pub async fn start(self) -> Result<()> {
         info!(
             "starting new worker on port {} with model {:?}",
@@ -66,6 +67,7 @@ impl Worker {
     }
 
     /// Run inference on the worker
+    #[tracing::instrument]
     pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
         //let mut s = self.status.lock().unwrap();
         //*s = WorkerStatus::Working;
@@ -105,6 +107,7 @@ impl worker_server::Worker for Worker {
     }
     */
 
+    #[tracing::instrument]
     async fn image_inference(
         &self,
         _request: Request<ImageInput>,

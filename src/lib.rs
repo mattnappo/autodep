@@ -12,7 +12,8 @@ pub mod rpc {
 /// file
 pub mod config {
     /// Path to the local libtorch installation
-    pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-ff2ab40729eb7ad5/out/libtorch/libtorch/lib";
+    //pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-ff2ab40729eb7ad5/out/libtorch/libtorch/lib";
+    pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-3f99fa23d8dcb15b/out/libtorch/libtorch/lib";
     //"/home/matt/autodep/target/debug/build/torch-sys-ff332d9a0497eb5d/out/libtorch/libtorch/lib/";
 
     /// The path to the compiled worker binary
