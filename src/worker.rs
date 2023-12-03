@@ -101,6 +101,7 @@ impl worker_server::Worker for Worker {
         let status = self.status.clone();
 
         // Mark worker as busy
+        /*
         {
             let mut s = status.lock().unwrap();
             *s = WorkerStatus::Working;
@@ -121,10 +122,33 @@ impl worker_server::Worker for Worker {
             let mut s = status.lock().unwrap();
             *s = WorkerStatus::Idle;
         }
+        */
+
+        let output = ClassOutput {
+            classes: vec![],
+            num_classes: 919,
+        };
 
         info!("worker successfully computed inference: {output:?}");
-        return Ok(Response::new(output.unwrap().into()));
+        return Ok(Response::new(output.into()));
     }
+
+    /*
+    async fn image_inference(
+        &self,
+        _request: Request<ImageInput>,
+    ) -> TResult<Response<ClassOutput>> {
+        info!("worker got FAKE inference request");
+
+        let output = ClassOutput {
+            classes: vec![],
+            num_classes: 919,
+        };
+
+        info!("worker successfully FAKED inference: {output:?}");
+        return Ok(Response::new(output.into()));
+    }
+        */
 
     async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
         info!("worker got status request");

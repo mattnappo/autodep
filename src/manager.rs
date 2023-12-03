@@ -149,19 +149,20 @@ impl Manager {
     // ----- Interface ----- //
 
     /// Run inference on an idle worker
+    //#[tracing::instrument]
     pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
         // Find an idle worker
         let handle = self.get_idle_worker().await?;
-        info!("handling inference request without starting a new worker");
+        debug!("make unlazy inference handle: {handle:?}");
         // Send req
         let req = Request::new(input.into());
-        let res = handle
-            .conn
-            .clone()
-            .image_inference(req)
-            .await?
-            .into_inner()
-            .into();
+
+        // Reconnent to the RPC client
+        let conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
+
+        // Send an RPC request for inference
+        let res = conn.clone().image_inference(req).await?.into_inner().into();
+        // Ok(Inference::Text("some inference".to_string()))
         Ok(res)
     }
 
@@ -172,10 +173,10 @@ impl Manager {
         //let mut handles = tokio_stream::iter(workers.values().collect::<Vec<&Handle>>());
         let mut handles = tokio_stream::iter(self.workers.values());
         while let Some(handle) = handles.next().await {
-            debug!("getting status of worker pid {}", handle.pid);
+            debug!("sending status request to worker pid = {}", handle.pid);
             let req = Request::new(rpc::Empty {});
             let res = handle.conn.clone().get_status(req).await?.into_inner();
-            debug!("got single status res: {res:?}");
+            debug!("got status of worker: {res:?}");
             map.insert(handle.clone(), res.into());
         }
 

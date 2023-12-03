@@ -25,6 +25,8 @@ async fn main() -> io::Result<()> {
     env::set_var("RUST_LOG", RUST_LOG);
     env_logger::init();
 
+    // tracing_subscriber::fmt::init();
+
     let (model, port) = get_args();
 
     let manager = web::Data::new(Mutex::new(Manager::new(model.clone())));
