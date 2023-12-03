@@ -36,7 +36,7 @@ async fn main() -> io::Result<()> {
 
     let (model, port) = get_args();
 
-    let manager = web::Data::new(Mutex::new(Manager::new(model.clone())));
+    let manager = web::Data::new(Mutex::new(Manager::new(model.clone()).await.unwrap()));
 
     // Start the HTTP server
     HttpServer::new(move || {

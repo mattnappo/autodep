@@ -9,18 +9,6 @@ use std::sync::Mutex;
 mod protocol;
 pub mod routes;
 
-pub struct Server {
-    manager: Mutex<Manager>,
-}
-
-impl Server {
-    pub fn new(model_file: String) -> anyhow::Result<Self> {
-        Ok(Server {
-            manager: Mutex::new(Manager::new(model_file)),
-        })
-    }
-}
-
 #[derive(Debug)]
 pub struct WebError {
     err: anyhow::Error,

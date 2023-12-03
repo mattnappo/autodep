@@ -3,8 +3,8 @@ use autodep::manager;
 use autodep::util::init_libtorch;
 use autodep::util::test;
 use env_logger;
-use tracing::*;
 use std::{env, process};
+use tracing::*;
 
 const USAGE: &str = "usage: ./autodep <model file>";
 
@@ -20,6 +20,8 @@ fn pause() {
 /// This is test code right now
 #[tokio::main]
 async fn main() -> Result<()> {
+    Ok(())
+    /*
     init_libtorch();
     env_logger::init();
 
@@ -56,4 +58,5 @@ async fn main() -> Result<()> {
     info!("got output: {:#?}", output);
 
     Ok(())
+    */
 }

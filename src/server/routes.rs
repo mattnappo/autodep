@@ -3,7 +3,6 @@
 //! distributes inference computation across the array of workers.
 
 use super::protocol;
-use super::Server;
 use super::WebError;
 use crate::config::*;
 use crate::manager::Manager;

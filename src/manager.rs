@@ -25,10 +25,11 @@ use tokio::fs;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
+use tonic::transport::Uri;
 use tonic::{Request, Response};
 use tracing::*;
 
-type Connection = WorkerClient<Channel>;
+//type Connection = WorkerClient<Channel>;
 
 /*
 impl Clone for Connection {
@@ -43,7 +44,7 @@ impl Clone for Connection {
 pub struct Handle {
     pub port: u16,
     pub pid: u32,
-    pub conn: Arc<Mutex<Connection>>,
+    pub channel: Channel,
 }
 
 impl Serialize for Handle {
@@ -70,13 +71,16 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn new(model_file: String) -> Self {
-        Manager {
+    pub async fn new(model_file: String) -> Result<Self> {
+        let mut m = Manager {
             //workers: Arc::new(RwLock::new(HashMap::new())),
             //workers: Arc::new(Mutex::new(HashMap::new())),
             workers: HashMap::new(),
             model_file,
-        }
+        };
+
+        m.start_new_workers(NUM_INIT_WORKERS).await?;
+        Ok(m)
     }
 
     /// Start a new worker process on the local machine and connect to it
@@ -96,7 +100,7 @@ impl Manager {
         let model_file = self.model_file.clone();
 
         // Start a new thread to spawn a new process
-        let (pid, conn) = tokio::task::spawn(async move {
+        let (pid, ch) = tokio::task::spawn(async move {
             // Start a new local worker process
             let command = format!("{} {}", port, model_file);
             let args = command.split(' ').map(|n| n.to_string());
@@ -131,12 +135,37 @@ impl Manager {
             }
             */
 
+            /*
+            // Connect to the new local worker
             // Spin until connection succeeds, or times out
             let now = time::Instant::now();
             loop {
-                // Connect to the new local worker
                 match WorkerClient::connect(format!("http://[::1]:{port}")).await {
-                    Ok(conn) => return Ok((pid, conn)),
+                    Ok(conn) => {
+                        return Ok((pid, conn));
+                    }
+                    Err(_) => {
+                        if now.elapsed().as_millis() >= WORKER_TIMEOUT {
+                            return Err(anyhow!("timeout connecting to new worker process"));
+                        }
+                        //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        // sleep for 100 ms
+                    }
+                }
+            }
+            */
+
+            let addr = format!("http://[::1]:{port}").parse::<Uri>().unwrap();
+            //let ch = Endpoint::new(addr).unwrap().connect().await.unwrap();
+            let endpoint = Endpoint::new(addr).unwrap();
+
+            // Spin
+            let now = time::Instant::now();
+            loop {
+                match endpoint.connect().await {
+                    Ok(channel) => {
+                        return Ok((pid, channel));
+                    }
                     Err(_) => {
                         if now.elapsed().as_millis() >= WORKER_TIMEOUT {
                             return Err(anyhow!("timeout connecting to new worker process"));
@@ -198,7 +227,8 @@ impl Manager {
         let handle = Handle {
             port,
             pid,
-            conn: Arc::new(Mutex::new(conn)),
+            //conn,
+            channel: ch,
         };
 
         info!("manager successfully connected to new worker (port = {port}, pid = {pid})",);
@@ -223,8 +253,11 @@ impl Manager {
             Some(worker) => Ok(worker.clone()),
             None => {
                 // If there are no idle workers, make a new worker (guaranteed to be idle)
-                info!("all workers are busy: attempting to start a new worker");
-                self.start_new_worker().await
+                info!("all workers are busy: come back later");
+                //self.start_new_worker().await
+                Err(anyhow!(
+                    "all workers are busy. chose not to make a new worker"
+                ))
             }
         }
     }
@@ -262,8 +295,9 @@ impl Manager {
         error!("marked as busy");
 
         // Send an RPC request for inference
-        let conn = handle.conn.lock().unwrap();
-        let res = conn.clone().image_inference(req).await?.into_inner().into();
+        let mut conn = WorkerClient::new(handle.channel.clone());
+        error!("made new worker client");
+        let res = conn.image_inference(req).await?.into_inner().into();
         error!("sent infr req");
         // Ok(Inference::Text("some inference".to_string()))
         if !SPOT_WORKERS {
@@ -290,7 +324,7 @@ impl Manager {
             .map(|(w, _)| Handle {
                 pid: w.pid,
                 port: w.port,
-                conn: w.conn.clone(),
+                channel: w.channel.clone(),
             })
             .collect()
     }

@@ -32,7 +32,7 @@ pub mod config {
         "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
 
     /// Number of workers to start the server with
-    pub const NUM_INIT_WORKERS: u16 = 2;
+    pub const NUM_INIT_WORKERS: u16 = 5;
 
     /// Pick `TOP_N` largest softmax probabilities in a classifier model
     pub const TOP_N: i64 = 5;
