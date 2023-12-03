@@ -101,7 +101,6 @@ impl worker_server::Worker for Worker {
         let status = self.status.clone();
 
         // Mark worker as busy
-        /*
         {
             let mut s = status.lock().unwrap();
             *s = WorkerStatus::Working;
@@ -122,15 +121,16 @@ impl worker_server::Worker for Worker {
             let mut s = status.lock().unwrap();
             *s = WorkerStatus::Idle;
         }
-        */
 
+        /*
         let output = ClassOutput {
             classes: vec![],
             num_classes: 919,
         };
+        */
 
         info!("worker successfully computed inference: {output:?}");
-        return Ok(Response::new(output.into()));
+        Ok(Response::new(output.unwrap().into()))
     }
 
     /*
