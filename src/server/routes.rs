@@ -106,7 +106,18 @@ pub async fn worker_status(
         Err(e) => Err(WebError { err: e }),
     }
     */
-    Ok(web::Json("all good here"))
+
+    let idling = {
+        let manager = state.read().unwrap();
+        (*manager)
+            .workers
+            .values()
+            //.filter(|&(_, s)| s.clone() == WorkerStatus::Idle)
+            .map(|(handle, status)| (handle.clone(), status.clone()))
+            .collect::<Vec<(Handle, WorkerStatus)>>()
+    };
+
+    Ok(web::Json(idling))
 }
 
 /// HTTP request to get server statistics
