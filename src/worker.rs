@@ -77,10 +77,10 @@ impl Worker {
 
     /// Run inference on the worker
     pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
-        let mut s = self.status.lock().unwrap();
-        *s = WorkerStatus::Working;
+        //let mut s = self.status.lock().unwrap();
+        //*s = WorkerStatus::Working;
         let res = self.model.run(input);
-        *s = WorkerStatus::Idle;
+        //*s = WorkerStatus::Idle;
         res
     }
 
