@@ -50,7 +50,6 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(model_file: String) -> Self {
-        error!("\n\nMADE A NEW MANAGER\n\n");
         Manager {
             //workers: Arc::new(RwLock::new(HashMap::new())),
             workers: Arc::new(Mutex::new(HashMap::new())),
@@ -171,12 +170,9 @@ impl Manager {
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
             let res = conn.unwrap().get_status(req).await?.into_inner();
-            //map.insert(handle.clone(), res.into());
             debug!("got single status res: {res:?}");
             map.insert(handle.clone(), res.into());
         }
-
-        error!("THE MAP IS: {map:?}");
 
         Ok(map)
     }

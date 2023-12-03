@@ -27,7 +27,7 @@ type Result<T> = std::result::Result<T, WebError>;
 #[post("/image_inference")]
 pub async fn image_inference(
     req: web::Json<protocol::B64Image>,
-    state: web::Data<Mutex<Server>>,
+    state: web::Data<Mutex<Manager>>,
 ) -> Result<impl Responder> {
     // Get input from request
     let input = {
@@ -40,21 +40,18 @@ pub async fn image_inference(
 
     // Tell the manager to compute inference
     let manager = state.lock().unwrap();
-    let manager = (*manager).manager.lock().unwrap();
     let output = manager.run_inference(input).await.unwrap();
 
     Ok(web::Json(output))
-    //Ok(web::Json("hi"))
 }
 
 /// HTTP request to get the status of all workers
 #[get("/workers/status")]
 pub async fn worker_status(
     _req: HttpRequest,
-    state: web::Data<Mutex<Server>>,
+    state: web::Data<Mutex<Manager>>,
 ) -> Result<impl Responder> {
     let manager = state.lock().unwrap();
-    let manager = (*manager).manager.lock().unwrap();
 
     let status = manager.all_status().await;
 
@@ -66,9 +63,8 @@ pub async fn worker_status(
 
 /// HTTP request to get server statistics
 #[get("/workers")]
-pub async fn workers(_req: HttpRequest, state: web::Data<Mutex<Server>>) -> impl Responder {
+pub async fn workers(_req: HttpRequest, state: web::Data<Mutex<Manager>>) -> impl Responder {
     let manager = state.lock().unwrap();
-    let manager = (*manager).manager.lock().unwrap();
 
     let workers = manager.all_workers();
     warn!("Workers: {workers:#?}");

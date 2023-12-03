@@ -1,4 +1,5 @@
 use actix_web::{middleware, web, App, HttpServer};
+use autodep::manager::Manager;
 use autodep::server::{self, routes};
 use std::sync::{Arc, Mutex};
 use std::{env, io, process};
@@ -29,12 +30,12 @@ async fn main() -> io::Result<()> {
 
     let (model, port) = get_args();
 
-    let server = web::Data::new(Mutex::new(server::Server::new(model.clone()).unwrap()));
+    let manager = web::Data::new(Mutex::new(Manager::new(model.clone())));
 
     // Start the HTTP server
     HttpServer::new(move || {
         App::new()
-            .app_data(server.clone())
+            .app_data(manager.clone())
             .wrap(middleware::Logger::default())
             .service(routes::image_inference)
             .service(routes::workers)
