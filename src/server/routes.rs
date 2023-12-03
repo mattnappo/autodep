@@ -17,8 +17,7 @@ use base64::{
     engine::{self, general_purpose},
     Engine as _,
 };
-use log::debug;
-use log::warn;
+use log::*;
 use std::sync::Mutex;
 
 type Result<T> = std::result::Result<T, WebError>;
@@ -39,9 +38,11 @@ pub async fn image_inference(
     };
 
     // Tell the manager to compute inference
-    let manager = state.lock().unwrap();
+    let mut manager = state.lock().unwrap();
     let output = manager.run_inference(input).await?;
     //actix_web::rt::task::spawn_blocking(move || manager.run_inference(input).await).await;
+
+    info!("finished serving inference request");
 
     Ok(web::Json(output))
 }

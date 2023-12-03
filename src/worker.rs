@@ -99,15 +99,27 @@ impl worker_server::Worker for Worker {
         let model = self.model.clone();
         let status = self.status.clone();
 
-        let output = actix_web::rt::task::spawn_blocking(move || {
+        // Mark worker as busy
+        {
             let mut s = status.lock().unwrap();
             *s = WorkerStatus::Working;
+        }
+
+        //actix_web::rt::time::sleep(std::time::Duration::from_millis(4000)).await;
+
+        // Run inference in a separate thread
+        let output = actix_web::rt::task::spawn_blocking(move || {
             let res = model.run(image);
-            *s = WorkerStatus::Idle;
             res
         })
         .await
         .unwrap();
+
+        // Change status back to Idle
+        {
+            let mut s = status.lock().unwrap();
+            *s = WorkerStatus::Idle;
+        }
 
         info!("worker successfully computed inference: {output:?}");
         return Ok(Response::new(output.unwrap().into()));

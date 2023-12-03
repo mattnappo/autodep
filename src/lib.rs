@@ -19,13 +19,13 @@ pub mod config {
     pub const WORKER_BINARY: &str = "./target/debug/worker";
 
     /// Maximum number of workers
-    pub const MAX_WORKERS: usize = 10;
+    pub const MAX_WORKERS: usize = 20;
 
     /// in ms
     pub const WORKER_TIMEOUT: u128 = 2000;
 
     pub const RUST_LOG: &str =
-        "h2=warn,worker=debug,autodep=debug,actix_web=debug,actix_server=info";
+        "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
 
     /// Number of workers to start the server with
     pub const NUM_INIT_WORKERS: u16 = 2;

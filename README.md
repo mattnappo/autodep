@@ -97,3 +97,29 @@ Seemingly can't handle a status request while inference is actually running (or,
 
 
 its not the model inference that takes a long time.... its the new process creator (500ms?)
+maybe?
+
+NOTE:
+NOTE implies(?) theory :  the actix threadpool is being blocked by the slow ops, which is why the server can't handle a status request while a very slow inference is happening
+
+
+the reason why we can't handle multiple inference reqs at the same time is for the same reason
+notice that when there is a super slow inference happening, actix doesn't even read/receive new requests.....
+
+
+
+
+
+when i made workers one-time-use by always being Working after one inference run,
+things seemed to work (when we were testing with sequential calls)
+
+the mechanism to spin up multiple workers and run inference on a second worker clearly works
+
+but its just not being triggered properly
+
+note: Making a worker one time use is locally the same as just making it sleep for a while
+well, not reall, since when it sleeps for a while it doesn't return
+but when it is one time use, it does return
+but does that matter tho?
+
+
