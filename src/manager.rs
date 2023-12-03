@@ -33,8 +33,6 @@ type Connection = WorkerClient<Channel>;
 pub struct Handle {
     pub port: u16,
     pub pid: u32,
-    #[serde(skip_serializing)]
-    pub conn: Connection,
 }
 
 /// The worker manager. Right now, assumes that all workers
@@ -111,7 +109,7 @@ impl Manager {
             }
         }
 
-        let handle = Handle { port, pid, conn };
+        let handle = Handle { port, pid };
 
         info!("manager successfully connected to new worker (port = {port}, pid = {pid})",);
 
@@ -125,13 +123,9 @@ impl Manager {
         let mut handles = tokio_stream::iter(self.workers.values());
         while let Some(handle) = handles.next().await {
             let req = Request::new(rpc::Empty {});
-            let res: WorkerStatus = handle
-                .conn
-                .clone()
-                .get_status(req)
-                .await?
-                .into_inner()
-                .into();
+            // Reconnent and send request
+            let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
+            let res: WorkerStatus = conn.get_status(req).await?.into_inner().into();
             match res {
                 WorkerStatus::Idle => {
                     info!("found an idle worker: no need for a new worker");
@@ -158,10 +152,10 @@ impl Manager {
         let req = Request::new(input.into());
 
         // Reconnent to the RPC client
-        let conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
+        let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
 
         // Send an RPC request for inference
-        let res = conn.clone().image_inference(req).await?.into_inner().into();
+        let res = conn.image_inference(req).await?.into_inner().into();
         // Ok(Inference::Text("some inference".to_string()))
         Ok(res)
     }
@@ -175,7 +169,10 @@ impl Manager {
         while let Some(handle) = handles.next().await {
             debug!("sending status request to worker pid = {}", handle.pid);
             let req = Request::new(rpc::Empty {});
-            let res = handle.conn.clone().get_status(req).await?.into_inner();
+
+            // Reconnect to the worker
+            let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
+            let res = conn.get_status(req).await?.into_inner();
             debug!("got status of worker: {res:?}");
             map.insert(handle.clone(), res.into());
         }
@@ -192,7 +189,6 @@ impl Manager {
             .map(|w| Handle {
                 pid: w.pid,
                 port: w.port,
-                conn: w.conn.clone(),
             })
             .collect()
     }
