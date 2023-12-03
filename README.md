@@ -82,3 +82,8 @@ Distributed and automatic ML model deployment at scale
 ## Important improvements
 - [ ] in `start_new_worker` -- a better mechanism than `thread.sleep`
 - [ ] in `run_inference` -- a better mechanism for starting a new worker
+
+
+
+## Idea
+-- remove second layer of ind to prevent deadlock in multithreade testing example

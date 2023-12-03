@@ -30,6 +30,8 @@ pub mod config {
 
 /// Network utility functions
 pub mod util {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     pub fn get_available_port() -> Option<u16> {
         port_scanner::request_open_port()
     }
@@ -40,7 +42,13 @@ pub mod util {
             "LD_LIBRARY_PATH",
             format!("${}:{}", ld_lib_path, super::config::LIBTORCH_PATH),
         );
-        std::env::set_var("RUST_LOG", "debug");
+    }
+
+    pub fn time() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
     }
 
     /// Functions for testing purposes

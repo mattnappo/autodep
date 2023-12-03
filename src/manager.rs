@@ -10,11 +10,15 @@ use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use nix::{sys::signal, unistd};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::process::Command;
+use std::fs::File;
+use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 use std::{thread, time};
 use tch::IndexOp;
 use tokio_stream::StreamExt;
@@ -30,11 +34,15 @@ pub struct Handle {
     pub conn: Option<WorkerClient<Channel>>,
 }
 
+//unsafe impl Send for Handle {}
+//unsafe impl Sync for Handle {}
+
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
-    workers: HashMap<u32, Handle>,
+    //workers: Arc<RwLock<HashMap<u32, Handle>>>,
+    workers: Arc<Mutex<HashMap<u32, Handle>>>,
 
     /// The path to the TorchScript model file
     model_file: String,
@@ -43,14 +51,16 @@ pub struct Manager {
 impl Manager {
     pub fn new(model_file: String) -> Self {
         Manager {
-            workers: HashMap::new(),
+            //workers: Arc::new(RwLock::new(HashMap::new())),
+            workers: Arc::new(Mutex::new(HashMap::new())),
             model_file,
         }
     }
 
     /// Start a new worker process on the local machine and connect to it
-    async fn start_new_worker(&mut self) -> Result<()> {
-        if self.workers.len() + 1 >= config::MAX_WORKERS {
+    async fn start_new_worker(&self) -> Result<Handle> {
+        let mut workers = self.workers.lock().unwrap();
+        if workers.len() + 1 >= config::MAX_WORKERS {
             return Err(anyhow!(
                 "maximum number of workers exceeded. cannot allocate any more",
             ));
@@ -63,9 +73,18 @@ impl Manager {
         // Start a new local worker process
         let command = format!("{} {}", port, self.model_file);
         let args = command.split(' ').map(|n| n.to_string());
+
+        let t = util::time();
+        let out_name = format!("./logs/worker_{}_{}.out", port, t);
+        let err_name = format!("./logs/worker_{}_{}.err", port, t);
+        let out_log = File::create(out_name).expect("failed to open log");
+        let err_log = File::create(err_name).expect("failed to open log");
+
         let pid = Command::new(WORKER_BINARY)
-            .env("RUST_LOG", "debug")
+            .env("RUST_LOG", "debug,worker=debug,autodep=debug")
             .args(args)
+            .stdout(out_log)
+            .stderr(err_log)
             .spawn()
             .unwrap()
             .id();
@@ -87,13 +106,17 @@ impl Manager {
             port, pid
         );
 
-        self.workers.insert(handle.pid, handle);
-        Ok(())
+        //workers.insert(handle.pid, handle);
+        let x = workers.insert(handle.pid, handle.clone());
+        warn!("\tupon add: {workers:?}");
+        warn!("\tx is : {x:?}");
+        Ok(handle)
     }
 
     /// Find an idle worker
     async fn find_idle_worker(&self) -> Result<Option<Handle>> {
-        let mut handles = tokio_stream::iter(self.workers.values());
+        let workers = self.workers.lock().unwrap();
+        let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
@@ -109,7 +132,7 @@ impl Manager {
     // ----- Interface ----- //
 
     /// Run inference on an idle worker
-    pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
+    pub async fn run_inference(&self, input: InputData) -> Result<Inference> {
         // Find an idle worker
         if let Some(handle) = self.find_idle_worker().await? {
             match handle.conn {
@@ -121,43 +144,46 @@ impl Manager {
                 None => todo!(), // Try to connect again
             }
         } else {
-            self.start_new_worker().await?;
+            let handle = self.start_new_worker().await?;
+            warn!("busy so created new handle: {handle:#?}");
 
-            // TODO: Terrible code
-            if let Some(handle) = self.find_idle_worker().await? {
-                match handle.conn {
-                    Some(mut conn) => {
-                        let req = Request::new(input.into());
-                        let res = conn.image_inference(req).await?.into_inner().into();
-                        Ok(res)
-                    }
-                    None => todo!(), // Try to connect again
+            match handle.conn {
+                Some(mut conn) => {
+                    let req = Request::new(input.into());
+                    let res = conn.image_inference(req).await?.into_inner().into();
+                    Ok(res)
                 }
-            } else {
-                Err(anyhow!("couldn't find an available worker"))
+                None => todo!(), // Try to connect again
             }
         }
     }
 
     /// Get the statuses of all workers
-    pub async fn all_status(&mut self) -> Result<HashMap<Handle, WorkerStatus>> {
+    pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
 
-        let mut handles = tokio_stream::iter(self.workers.values().collect::<Vec<&Handle>>());
+        let workers = self.workers.lock().unwrap();
+        //let mut handles = tokio_stream::iter(workers.values().collect::<Vec<&Handle>>());
+        let mut handles = tokio_stream::iter(workers.values());
         while let Some(handle) = handles.next().await {
             debug!("getting status of worker pid {}", handle.pid);
             let conn = handle.conn.clone();
             let req = Request::new(rpc::Empty {});
             let res = conn.unwrap().get_status(req).await?.into_inner();
+            debug!("got single status res: {res:?}");
             map.insert(handle.clone(), res.into());
         }
 
         Ok(map)
     }
 
+    // idea: the Manager is being cloned in the data part of the actix framework
+
     /// Return all the workers, without their status
-    pub fn all_workers(&mut self) -> Vec<Handle> {
-        self.workers
+    pub fn all_workers(&self) -> Vec<Handle> {
+        let workers = self.workers.lock().unwrap();
+        warn!("WORKERS INTERNAL: {:#?}", workers.values());
+        workers
             .values()
             .map(|w| Handle {
                 pid: w.pid,
@@ -177,14 +203,15 @@ impl Manager {
     }
 
     /// Kill an idle worker and return a partial handle to it
-    pub async fn kill_worker(&mut self) -> Result<Handle> {
+    pub async fn kill_worker(&self) -> Result<Handle> {
         // Find an idle worker
         match self.find_idle_worker().await? {
             // If that worker exists, kill it
             Some(h) => {
                 let pid = h.pid;
                 // Remove it from the worker store
-                let handle = self.workers.remove(&pid).unwrap();
+                let mut workers = self.workers.lock().unwrap();
+                let handle = workers.remove(&pid).unwrap();
                 // Kill the process
                 signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
                 Ok(handle)

@@ -18,6 +18,7 @@ use base64::{
     Engine as _,
 };
 use log::debug;
+use log::warn;
 use std::sync::Mutex;
 
 type Result<T> = std::result::Result<T, WebError>;
@@ -26,7 +27,7 @@ type Result<T> = std::result::Result<T, WebError>;
 #[post("/image_inference")]
 pub async fn image_inference(
     req: web::Json<protocol::B64Image>,
-    state: web::Data<Server>,
+    state: web::Data<Mutex<Manager>>,
 ) -> Result<impl Responder> {
     // Get input from request
     let input = {
@@ -38,31 +39,34 @@ pub async fn image_inference(
     };
 
     // Tell the manager to compute inference
-    let mut manager = state.manager.lock().unwrap();
+    let manager = state.lock().unwrap();
     let output = manager.run_inference(input).await.unwrap();
 
     Ok(web::Json(output))
-    //Ok(web::Json("hi"))
 }
 
 /// HTTP request to get the status of all workers
 #[get("/workers/status")]
-pub async fn worker_status(_req: HttpRequest, state: web::Data<Server>) -> Result<impl Responder> {
-    let mut manager = state.manager.lock().unwrap();
+pub async fn worker_status(
+    _req: HttpRequest,
+    state: web::Data<Mutex<Manager>>,
+) -> Result<impl Responder> {
+    let manager = state.lock().unwrap();
 
     let status = manager.all_status().await;
 
     match status {
         Ok(s) => Ok(web::Json(protocol::AllStatusResponse(s))),
         Err(e) => Err(WebError { err: e }),
-        //Err(e) => Ok(web::Json("some error lol".to_string())),
     }
 }
 
 /// HTTP request to get server statistics
 #[get("/workers")]
-pub async fn workers(_req: HttpRequest, state: web::Data<Server>) -> impl Responder {
-    let mut manager = state.manager.lock().unwrap();
+pub async fn workers(_req: HttpRequest, state: web::Data<Mutex<Manager>>) -> impl Responder {
+    let manager = state.lock().unwrap();
+
     let workers = manager.all_workers();
+    warn!("Workers: {workers:#?}");
     web::Json(workers)
 }

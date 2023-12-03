@@ -34,7 +34,6 @@ impl std::fmt::Display for WebError {
 
 impl actix_web::error::ResponseError for WebError {
     fn error_response(&self) -> HttpResponse {
-        println!("weird don't run plz");
         let err = HashMap::from([("errors", vec![self.to_string()])]);
 
         HttpResponse::build(self.status_code())
