@@ -21,6 +21,9 @@ pub mod config {
     /// Maximum number of workers
     pub const MAX_WORKERS: usize = 20;
 
+    pub const RUST_LOG: &str =
+        "h2=warn,worker=debug,autodep=debug,actix_web=debug,actix_server=info";
+
     /// Number of workers to start the server with
     pub const NUM_INIT_WORKERS: u16 = 2;
 

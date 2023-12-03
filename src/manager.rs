@@ -2,7 +2,7 @@
 //! interfacing with a set of workers. The manager starts and stops workers, and
 //! forwards inference requests
 
-use crate::config::{self, WORKER_BINARY};
+use crate::config::{self, *};
 use crate::rpc::{self, worker_client::WorkerClient};
 use crate::torch::Inference;
 use crate::torch::InputData;
@@ -33,9 +33,6 @@ pub struct Handle {
     #[serde(skip_serializing)]
     pub conn: Option<WorkerClient<Channel>>,
 }
-
-//unsafe impl Send for Handle {}
-//unsafe impl Sync for Handle {}
 
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
@@ -81,7 +78,7 @@ impl Manager {
         let err_log = File::create(err_name).expect("failed to open log");
 
         let pid = Command::new(WORKER_BINARY)
-            .env("RUST_LOG", "debug,worker=debug,autodep=debug")
+            .env("RUST_LOG", RUST_LOG)
             .args(args)
             .stdout(out_log)
             .stderr(err_log)
