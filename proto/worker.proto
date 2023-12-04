@@ -47,6 +47,7 @@ message Inference {
     optional B64Image image = 1; // for X-to-image tasks
     optional string text = 2; // for X-to-text tasks
     optional Classes classification = 3; // for classification tasks
+    float duration = 4; // Inference time in seconds
 }
 
 // An inference worker

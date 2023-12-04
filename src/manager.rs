@@ -160,25 +160,25 @@ impl Manager {
     pub async fn run_inference(
         channel: Channel,
         input: torch::InferenceTask,
-    ) -> Result<torch::Inference> {
+    ) -> Result<torch::TimedInference> {
         let mut worker_client = WorkerClient::new(channel);
         let ty = input.inference_type.clone();
         let req = Request::new(input.into());
-        let output: rpc::Inference = worker_client.compute_inference(req).await?.into_inner();
+        let rpc_output: rpc::Inference = worker_client.compute_inference(req).await?.into_inner();
 
         // Parse output
         let output = match ty {
             torch::InferenceType::ImageClassification { .. } => {
-                let classes: Vec<torch::Class> = output.classification.unwrap().into();
+                let classes: Vec<torch::Class> = rpc_output.classification.unwrap().into();
                 torch::Inference::Classification(classes)
             }
             torch::InferenceType::ImageToImage => {
-                torch::Inference::B64Image(output.image.unwrap().into())
+                torch::Inference::B64Image(rpc_output.image.unwrap().into())
             }
             _ => unimplemented!(),
         };
 
-        Ok(output)
+        Ok((output, time::Duration::from_secs_f32(rpc_output.duration)))
     }
 
     /// Get a handle to an idle worker, if any workers are idle

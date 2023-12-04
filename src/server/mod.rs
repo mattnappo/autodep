@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::io;
 use std::sync::RwLock;
 
-mod protocol;
 pub mod routes;
 
 pub struct Server;

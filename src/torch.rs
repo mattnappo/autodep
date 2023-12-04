@@ -7,6 +7,7 @@ use base64::{
     engine::{self, general_purpose},
     Engine as _,
 };
+use std::time;
 
 use base64;
 use image::{codecs::png::PngEncoder, DynamicImage, ImageBuffer, ImageOutputFormat, Rgb};
@@ -17,6 +18,8 @@ use tch::{IValue, Kind};
 
 use image::GenericImageView;
 use tch::{nn, no_grad, vision, Device, Tensor};
+
+pub type TimedInference = (Inference, time::Duration);
 
 /// An in-memory representation of an image (not base 64). Can be the input or output of a model
 #[derive(Debug, Serialize, Clone, Deserialize)]
@@ -228,6 +231,7 @@ impl TorchModel {
         }))
     }
 
+    /// Not yet supported
     pub fn text_to_text(&self, task: InferenceTask) -> Result<Inference> {
         let device = Device::Cpu;
 
@@ -253,16 +257,22 @@ impl TorchModel {
     }
 
     /// Run inference on the loaded model given an `InferenceTask`
-    pub fn run(&self, task: InferenceTask) -> Result<Inference> {
+    pub fn run(&self, task: InferenceTask) -> Result<(Inference, time::Duration)> {
+        let now = time::Instant::now();
         match task.inference_type {
             InferenceType::ImageClassification { top_n } => match task.data {
-                InputData::B64Image(image) => Ok(self.image_classification(image.into(), top_n)?),
+                InputData::B64Image(image) => Ok((
+                    self.image_classification(image.into(), top_n)?,
+                    now.elapsed(),
+                )),
                 _ => Err(anyhow!(
                     "invalid input type for ImageClassification inference"
                 )),
             },
             InferenceType::ImageToImage => match task.data {
-                InputData::B64Image(image) => Ok(self.image_to_image(image.into())?),
+                InputData::B64Image(image) => {
+                    Ok((self.image_to_image(image.into())?, now.elapsed()))
+                }
                 _ => Err(anyhow!("invalid input type for ImageToImage inference")),
             },
             _ => Err(anyhow!("that inference type is not currently supported")),
@@ -270,8 +280,9 @@ impl TorchModel {
     }
 }
 
-impl From<Vec<Class>> for rpc::Inference {
-    fn from(classes: Vec<Class>) -> Self {
+impl From<(Vec<Class>, time::Duration)> for rpc::Inference {
+    fn from(data: (Vec<Class>, time::Duration)) -> Self {
+        let (classes, duration) = data;
         rpc::Inference {
             text: None,
             image: None,
@@ -284,19 +295,21 @@ impl From<Vec<Class>> for rpc::Inference {
                     })
                     .collect(),
             }),
+            duration: duration.as_secs_f32(),
         }
     }
 }
 
-impl From<Inference> for rpc::Inference {
-    fn from(inference: Inference) -> rpc::Inference {
-        match inference {
+impl From<TimedInference> for rpc::Inference {
+    fn from(inference: TimedInference) -> rpc::Inference {
+        match inference.0 {
             Inference::Text(text) => rpc::Inference {
                 text: Some(text),
                 image: None,
                 classification: None,
+                duration: inference.1.as_secs_f32(),
             },
-            Inference::Classification(c) => c.into(),
+            Inference::Classification(c) => (c, inference.1).into(),
             Inference::B64Image(byte_str) => rpc::Inference {
                 image: Some(rpc::B64Image {
                     //image: byte_str.as_bytes().to_vec(),
@@ -306,6 +319,7 @@ impl From<Inference> for rpc::Inference {
                 }),
                 text: None,
                 classification: None,
+                duration: inference.1.as_secs_f32(),
             },
         }
     }
