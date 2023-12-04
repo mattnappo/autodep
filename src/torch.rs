@@ -160,65 +160,9 @@ impl TorchModel {
 
     /// Run image-to-image inference
     fn image_to_image(&self, image: Image) -> Result<Inference> {
-        //let img = imagenet::load_image_from_memory(&image.image)?;
-        //let img = tch::vision::image::load_from_memory(&image.image)?;
-        //println!("DIMS: {:?}", img.size());
-        //println!("KIND: {:?}", img.kind());
-
-        // Convert the image to a Tensor and normalize it
-        //let img: Tensor = img.into();
-        // normalize to [0, 1]
-        //let img = img.unsqueeze(0);
-        //println!("DIMS: {:?}", img.size());
-
-        // from [height, width, channels] to [channels, height, width]
-        //let img = img.permute(&[2, 0, 1]);
-        // add batch dimension
-        //let img = img.unsqueeze(0);
-
-        // Run the model on the image
-        //let img = IValue::Tensor(img);
-        //println!("KIND: {:?}", img.kind());
-        //let output = self.model.forward_ts(&[img])?;
-        //let image = imagenet::load_image_from_memory(&image.image)?;
-        //let output = no_grad(|| self.model.forward_ts(&[image])).unwrap();
-
-        // The output is a Tensor with shape [1, num_classes, height, width]
-        // You can convert it to a 2D image where each pixel's value is the class index
-        /*
-        let output = match output {
-            IValue::Tensor(t) => t,
-            _ => return Err(anyhow!("invalid type")),
-        };
-        */
-        //let output: Tensor = output.get(0);
-        //let output = output.squeeze(); // remove the batch dimension
-        //let output = output.argmax(0, false); // get the class index for each pixel
-        //let output = output.to_kind(Kind::Uint8); // convert to uint8
-
-        // code is good up to here
-        //let (width, height) = (output.size()[1], output.size()[0]);
-
-        //let t = std::time::Instant::now();
-        //tch::vision::image::save(&output, format!("sd_{:?}.png", t)).unwrap();
-
-        // -- NEW --  //
-
-        // Load the image
-        //let img = image::open("../images/cat.png").unwrap().to_rgb8();
-        //let (width, height) = img.dimensions();
+        // Load image and convert to float tensor
         let img = tch::vision::image::load_from_memory(&image.image)?;
-        //let img = tch::vision::image::load("images/cat.png")?;
-
-        // Convert the image to a Tensor and normalize it
-        //let img: Tensor = img.into();
-        let img = img.to_kind(tch::Kind::Float) / 255.; // normalize to [0, 1]
-                                                        //let img = img.permute(&[2, 0, 1]); // from [height, width, channels] to [channels, height, width]
-
-        // Normalize the image with the given mean and std
-        //let mean = Tensor::from_slice(&[0.485, 0.456, 0.406]).view([3, 1, 1]);
-        //let std = Tensor::from_slice(&[0.229, 0.224, 0.225]).view([3, 1, 1]);
-        //let img = (img - mean) / std;
+        let img = img.to_kind(tch::Kind::Float) / 255.;
 
         // Add a batch dimension
         let img = img.unsqueeze(0);
@@ -238,6 +182,7 @@ impl TorchModel {
             }
         }
         .unwrap();
+
         // Extract the tensor
         let output_predictions = match output {
             IValue::Tensor(t) => t.squeeze().argmax(0, false),
@@ -247,68 +192,30 @@ impl TorchModel {
                 ))
             }
         };
-        println!("{:?} output tensor", output_predictions.print());
-
-        // ...
 
         // Create the palette and colors
         let palette = Tensor::from_slice(&[2i64.pow(25) - 1, 2i64.pow(15) - 1, 2i64.pow(21) - 1]);
         let colors: Tensor =
             Tensor::from_slice(&(0..21).collect::<Vec<_>>()[..]).unsqueeze(-1) * palette;
         let colors = colors.remainder(255).to_kind(Kind::Uint8);
-        println!("COLORS: {:?} {:?}", colors.kind(), colors);
 
-        let t = std::time::Instant::now();
-        //tch::vision::image::save(&colors, format!("pred_{:?}.png", t)).unwrap();
-
-        // Convert the Tensor back to an ImageBuffer
-        //println!("preds, {:?}", output_predictions.print());
         let (width, height) = (output_predictions.size()[1], output_predictions.size()[0]);
-        /*
-        println!("KIND: {:?}", output_predictions.kind());
-        let mut output_data_iter = output_predictions.view([-1]).iter::<i64>().unwrap();
-        let mut output_data = vec![];
-        while let Some(val) = output_data_iter.next() {
-            output_data.push((val % 255) as u8);
-        }
-        */
 
+        // Wrtie tensor to vector
         let mut output_data = vec![];
         let mut i = output_predictions.view([-1]).iter::<i64>().unwrap();
         while let Some(class_index) = i.next() {
-            //let color = colors.int64_value(&[class_index as i64]);
-            //output_data.push(color as u8);
-            //output_data.push(color as u8);
-            //output_data.push(color as u8);
-
             let color = colors.get(class_index as i64);
             let mut dst = vec![0; 3];
             color.copy_data(&mut dst, 3);
             output_data.extend_from_slice(&dst);
         }
 
-        //println!("output data: {:?}", output_data);
-
-        println!(
-            "w, h = {}, {}\noutput_data = {:?}",
-            width,
-            height,
-            output_data.len()
-        );
+        // Convert tensor to rgb image
         let output_image: ImageBuffer<Rgb<u8>, _> =
             ImageBuffer::from_raw(width as u32, height as u32, output_data).unwrap();
 
-        // Set the palette of the image
-        /*
-        for (i, pixel) in output_image.pixels_mut().enumerate() {
-            let color = colors.int64_value(&[i as i64]);
-            *pixel = image::Rgb([color as u8, color as u8, color as u8]);
-        }
-        */
-
-        // Save the output image
-        output_image.save("output.png").unwrap();
-
+        // Write to b64
         let mut image_data: Vec<u8> = Vec::new();
         output_image
             .write_to(&mut Cursor::new(&mut image_data), ImageOutputFormat::Png)
@@ -469,17 +376,6 @@ impl From<InferenceTask> for rpc::InferenceTask {
         }
     }
 }
-
-/*
-impl From<rpc::Inference> for Inference {
-    fn from(inference: rpc::Inference) -> Inference {
-        Inference {
-            data: inference.data,
-            inference_type: inference.inference_type,
-        }
-    }
-}
-*/
 
 impl From<rpc::Classes> for Vec<Class> {
     fn from(classes: rpc::Classes) -> Vec<Class> {

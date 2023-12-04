@@ -84,11 +84,11 @@ impl worker_server::Worker for Worker {
         info!("worker got inference request");
         // Parse input request
         let task: torch::InferenceTask = request.into_inner().into();
+        debug!("task: {:?}", task);
 
         // Run model inference
         let model = self.model.clone();
         let res = model.run(task).unwrap();
-        //let res = self.run(image).unwrap();
 
         info!("worker successfully computed inference: {res:?}");
         Ok(Response::new(res.into()))
