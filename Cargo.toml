@@ -11,24 +11,13 @@ name = "autodep"
 path = "src/init_worker.rs"
 name = "worker"
 
-[[bin]]
-path = "src/test.rs"
-name = "test"
-
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-# util
-env_logger = "0.10.1"
-anyhow = "1.0.75"
-log = "0.4.20"
-port_scanner = "0.1.5"
+# tokio
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream = "0.1.14"
-rand = "0.7"
-nix = { version = "0.27.1", features = ["signal"] }
-base64 = "0.21.5"
 
 # for worker rpc server
 tonic = "0.10"
@@ -38,11 +27,17 @@ tch = { version = "0.14.0", features = [ "download-libtorch" ] }
 # for http server
 actix-web = "4.4.0"
 serde = "1.0.193"
-serde_json = "1.0.108"
 
-# debugging
+# logging
 tracing = "0.1"
 tracing-subscriber = "0.3"
+
+# util
+anyhow = "1.0.75"
+port_scanner = "0.1.5"
+rand = "0.7"
+nix = { version = "0.27.1", features = ["signal"] }
+base64 = "0.21.5"
 
 [build-dependencies]
 tonic-build = "0.10"

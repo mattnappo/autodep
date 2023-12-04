@@ -1,23 +1,23 @@
 //! An inference worker listens for requests from the `Manager` and computes
 //! model inference in an isolated environment
 
-use crate::config::*;
 use crate::rpc::worker_server::{self, WorkerServer};
-use crate::rpc::{ClassOutput, Empty, ImageInput, Status};
-use crate::torch;
-use anyhow::anyhow;
+use crate::rpc::{ClassOutput, ImageInput};
+use crate::torch::{self};
+
 use anyhow::Result;
-use log::{debug, error, info, warn};
 use serde::Serialize;
-use std::io::Write;
-use std::sync::{Arc, Mutex};
+
+use std::sync::Arc;
+use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response};
+use tracing::*;
 
 type TResult<T> = Result<T, tonic::Status>;
 
 /// The current status of a worker
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum WorkerStatus {
     /// Currently computing inference
     Working = 0,
@@ -32,25 +32,12 @@ pub enum WorkerStatus {
     Error,
 }
 
-impl From<Status> for WorkerStatus {
-    fn from(s: Status) -> Self {
-        match s.status {
-            0 => WorkerStatus::Working,
-            1 => WorkerStatus::Idle,
-            2 => WorkerStatus::ShuttingDown,
-            3 | _ => WorkerStatus::Error,
-            //_ => unreachable!(),
-        }
-    }
-}
-
 /// A worker runs as a separate process, spawned by the resource manager.
 /// A worker runs an RPC server listening for requests to compute inference
 /// on its own local copy of the model
 #[derive(Debug)]
 pub struct Worker {
     model: Arc<torch::TorchModel>,
-    status: Arc<Mutex<WorkerStatus>>,
     port: u16,
 }
 
@@ -58,12 +45,12 @@ impl Worker {
     pub fn new(model_file: String, port: u16) -> Result<Self> {
         Ok(Worker {
             model: Arc::new(torch::TorchModel::new(model_file)?),
-            status: Arc::new(Mutex::new(WorkerStatus::Idle)),
             port,
         })
     }
 
     /// Start listening for requests
+    #[tracing::instrument]
     pub async fn start(self) -> Result<()> {
         info!(
             "starting new worker on port {} with model {:?}",
@@ -71,21 +58,20 @@ impl Worker {
         );
         let addr = format!("[::1]:{}", self.port).parse().unwrap();
         let svc = WorkerServer::new(self);
-        Server::builder().add_service(svc).serve(addr).await?;
+        Server::builder()
+            .tcp_keepalive(Some(Duration::from_millis(1000)))
+            .concurrency_limit_per_connection(32)
+            .add_service(svc)
+            .serve(addr)
+            .await?;
         Ok(())
     }
 
     /// Run inference on the worker
+    #[tracing::instrument]
     pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
-        //let mut s = self.status.lock().unwrap();
-        //*s = WorkerStatus::Working;
-        let res = self.model.run(input);
-        //*s = WorkerStatus::Idle;
-        res
+        self.model.run(input)
     }
-
-    /// Shutdown the worker
-    pub fn shutdown(&self) {}
 }
 
 #[tonic::async_trait]
@@ -95,74 +81,15 @@ impl worker_server::Worker for Worker {
         _request: Request<ImageInput>,
     ) -> TResult<Response<ClassOutput>> {
         info!("worker got inference request");
+        // Parse input request
         let image: torch::InputData = _request.into_inner().into();
 
+        // Run model inference
         let model = self.model.clone();
-        let status = self.status.clone();
+        let res = model.run(image).unwrap();
+        //let res = self.run(image).unwrap();
 
-        // Mark worker as busy
-        {
-            let mut s = status.lock().unwrap();
-            *s = WorkerStatus::Working;
-        }
-
-        //actix_web::rt::time::sleep(std::time::Duration::from_millis(4000)).await;
-
-        // Run inference in a separate thread
-        let output = actix_web::rt::task::spawn_blocking(move || {
-            let res = model.run(image);
-            res
-        })
-        .await
-        .unwrap();
-
-        // Change status back to Idle (if workers are not one-time-use)
-        if !SPOT_WORKERS {
-            let mut s = status.lock().unwrap();
-            *s = WorkerStatus::Idle;
-        }
-
-        /*
-        let output = ClassOutput {
-            classes: vec![],
-            num_classes: 919,
-        };
-        */
-
-        info!("worker successfully computed inference: {output:?}");
-        Ok(Response::new(output.unwrap().into()))
-    }
-
-    /*
-    async fn image_inference(
-        &self,
-        _request: Request<ImageInput>,
-    ) -> TResult<Response<ClassOutput>> {
-        info!("worker got FAKE inference request");
-
-        let output = ClassOutput {
-            classes: vec![],
-            num_classes: 919,
-        };
-
-        info!("worker successfully FAKED inference: {output:?}");
-        return Ok(Response::new(output.into()));
-    }
-        */
-
-    async fn get_status(&self, _request: Request<Empty>) -> TResult<Response<Status>> {
-        info!("worker got status request");
-        let status = self.status.lock().unwrap();
-        Ok(Response::new(Status {
-            status: status.clone() as i32,
-        }))
-    }
-
-    // DEPRECATED
-    async fn shutdown(&self, _request: Request<Empty>) -> TResult<Response<Empty>> {
-        info!("worker got shutdown request");
-        let mut g = self.status.lock().unwrap();
-        *g = WorkerStatus::ShuttingDown;
-        Ok(Response::new(Empty {}))
+        info!("worker successfully computed inference: {res:?}");
+        Ok(Response::new(res.into()))
     }
 }

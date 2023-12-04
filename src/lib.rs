@@ -12,8 +12,11 @@ pub mod rpc {
 /// file
 pub mod config {
     /// Path to the local libtorch installation
-    pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-ff2ab40729eb7ad5/out/libtorch/libtorch/lib";
-    //"/home/matt/autodep/target/debug/build/torch-sys-ff332d9a0497eb5d/out/libtorch/libtorch/lib/";
+    pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-3f99fa23d8dcb15b/out/libtorch/libtorch/lib";
+
+    /// Logging settings
+    pub const RUST_LOG: &str =
+        "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
 
     /// The path to the compiled worker binary
     pub const WORKER_BINARY: &str = "./target/debug/worker";
@@ -21,17 +24,14 @@ pub mod config {
     /// Maximum number of workers
     pub const MAX_WORKERS: usize = 20;
 
-    /// in ms
-    pub const WORKER_TIMEOUT: u128 = 2000;
+    /// Number of workers to start the server with
+    pub const NUM_INIT_WORKERS: u16 = 5;
+
+    /// Max time given to connect to a worker's RPC server, in millis
+    pub const WORKER_TIMEOUT: u128 = 700;
 
     /// Spot workers are one-time-use workers
     pub const SPOT_WORKERS: bool = false;
-
-    pub const RUST_LOG: &str =
-        "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
-
-    /// Number of workers to start the server with
-    pub const NUM_INIT_WORKERS: u16 = 2;
 
     /// Pick `TOP_N` largest softmax probabilities in a classifier model
     pub const TOP_N: i64 = 5;
@@ -40,6 +40,11 @@ pub mod config {
 /// Network utility functions
 pub mod util {
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    pub fn init_logging() {
+        std::env::set_var("RUST_LOG", super::config::RUST_LOG);
+        tracing_subscriber::fmt::init();
+    }
 
     pub fn get_available_port() -> Option<u16> {
         port_scanner::request_open_port()

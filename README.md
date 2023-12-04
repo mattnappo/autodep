@@ -68,58 +68,14 @@ Distributed and automatic ML model deployment at scale
 - [ ] Make `TOP_N` an HTTP API parameter
 - [ ] Add stats to `Worker`
 - [ ] AWS (S3) input/output support
-- [ ] Make `TResult` cleaner type alias
 - [ ] Allow for `Worker`s on different hosts
-- [ ] Make a better mechanism than `thread.sleep` for waiting for a worker to start
-    - [ ] Idea: make the worker return `Ready` when its done initializing?
-    - [ ] Idea: have a timeout mechanism?
-- [ ] Run new `./worker` processes procs without cargo
-- [ ] Fix the jank in `all_status`
+- [x] Make a better mechanism than `thread.sleep` for waiting for a worker to start
+- [x] Run new `./worker` processes procs without cargo
+- [x] Fix the jank in `all_status`
 - [ ] Make `class_int` optional in the protobuf
-- [ ] Maybe remove second layer of indirection `Server` around `Manager`
-- [ ] Make image deserialization on web side more robust
+- [x] Maybe remove second layer of indirection `Server` around `Manager`
+- [x] Make image deserialization on web side more robust
 
 ## Important improvements
-- [ ] in `start_new_worker` -- a better mechanism than `thread.sleep`
+- [x] in `start_new_worker` -- a better mechanism than `thread.sleep`
 - [ ] in `run_inference` -- a better mechanism for starting a new worker
-
-
-
-## Idea
--- remove second layer of ind to prevent deadlock in multithreade testing example
-
-
-## IMPORTANT
-The bug seems to only happen whenever it receives two inference requests at the same time.
-
-Seemingly can't handle a status request while inference is actually running (or, the sleep in the torch.run method is running)
-
-
-
-its not the model inference that takes a long time.... its the new process creator (500ms?)
-maybe?
-
-NOTE:
-NOTE implies(?) theory :  the actix threadpool is being blocked by the slow ops, which is why the server can't handle a status request while a very slow inference is happening
-
-
-the reason why we can't handle multiple inference reqs at the same time is for the same reason
-notice that when there is a super slow inference happening, actix doesn't even read/receive new requests.....
-
-
-
-
-
-when i made workers one-time-use by always being Working after one inference run,
-things seemed to work (when we were testing with sequential calls)
-
-the mechanism to spin up multiple workers and run inference on a second worker clearly works
-
-but its just not being triggered properly
-
-note: Making a worker one time use is locally the same as just making it sleep for a while
-well, not reall, since when it sleeps for a while it doesn't return
-but when it is one time use, it does return
-but does that matter tho?
-
-

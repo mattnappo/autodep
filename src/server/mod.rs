@@ -2,22 +2,33 @@ use crate::manager::Manager;
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
+use actix_web::{middleware, web, App, HttpServer};
 use anyhow::anyhow;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::io;
+use std::sync::RwLock;
 
 mod protocol;
 pub mod routes;
 
-pub struct Server {
-    manager: Mutex<Manager>,
-}
+pub struct Server;
 
 impl Server {
-    pub fn new(model_file: String) -> anyhow::Result<Self> {
-        Ok(Server {
-            manager: Mutex::new(Manager::new(model_file)),
+    pub async fn new(model: String, port: u16) -> io::Result<()> {
+        let manager = web::Data::new(RwLock::new(Manager::new(model.clone()).await.unwrap()));
+
+        // Start the HTTP server
+        HttpServer::new(move || {
+            App::new()
+                .app_data(manager.clone())
+                .wrap(middleware::Logger::default())
+                .service(routes::image_inference)
+                .service(routes::workers)
+                .service(routes::worker_status)
         })
+        .bind(format!("0.0.0.0:{port}"))?
+        .run()
+        .await
     }
 }
 

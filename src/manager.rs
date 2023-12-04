@@ -3,190 +3,200 @@
 //! forwards inference requests
 
 use crate::config::{self, *};
-use crate::rpc::{self, worker_client::WorkerClient};
+use crate::rpc::worker_client::WorkerClient;
 use crate::torch::Inference;
 use crate::torch::InputData;
 use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
-use log::{debug, error, info, warn};
-use nix::{sys::signal, unistd};
-use serde::Serialize;
+
+use serde::ser::Serialize;
+use serde::Serialize as DeriveSerialize;
 use std::collections::HashMap;
 use std::fs::File;
-use std::process::{Command, Stdio};
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
-use std::{thread, time};
-use tch::IndexOp;
+use std::process::Command;
+
+use std::time;
+
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
-use tonic::{Request, Response};
-
-type Connection = WorkerClient<Channel>;
+use tonic::transport::Uri;
+use tonic::Request;
+use tracing::*;
 
 /// A handle to a worker
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct Handle {
+    pub port: u16,
+    pub pid: u32,
+    pub channel: Channel,
+}
+
+/// A (pid, port) tuple
+#[derive(Clone, Debug, DeriveSerialize)]
+pub struct PartialHandle {
     pub port: u16,
     pub pid: u32,
 }
 
+impl Serialize for Handle {
+    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let s = format!("{:?}", self);
+        serializer.serialize_str(&s)
+    }
+}
+
 /// The worker manager. Right now, assumes that all workers
 /// are on the same host
+#[derive(Debug)]
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
-    //workers: Arc<RwLock<HashMap<u32, Handle>>>,
-    //workers: Arc<Mutex<HashMap<u32, Handle>>>,
-    workers: HashMap<u32, Handle>,
+    pub workers: HashMap<u32, (Handle, WorkerStatus)>,
 
     /// The path to the TorchScript model file
     model_file: String,
 }
 
 impl Manager {
-    pub fn new(model_file: String) -> Self {
-        Manager {
-            //workers: Arc::new(RwLock::new(HashMap::new())),
-            //workers: Arc::new(Mutex::new(HashMap::new())),
+    /// Start a new manager and start `NUM_INIT_WORKERS` new worker processes
+    pub async fn new(model_file: String) -> Result<Self> {
+        let mut m = Manager {
             workers: HashMap::new(),
             model_file,
-        }
+        };
+
+        m.start_new_workers(NUM_INIT_WORKERS).await?;
+        Ok(m)
     }
 
     /// Start a new worker process on the local machine and connect to it
+    #[tracing::instrument]
     async fn start_new_worker(&mut self) -> Result<Handle> {
-        //let mut workers = self.workers.lock().unwrap();
         if self.workers.len() + 1 >= config::MAX_WORKERS {
             return Err(anyhow!(
                 "maximum number of workers exceeded. cannot allocate any more",
             ));
         }
+
         // Find an open port
         let port = util::get_available_port().unwrap(); // Use ok_or here
-
         debug!("found free port {port}");
 
-        // Start a new local worker process
-        let command = format!("{} {}", port, self.model_file);
-        let args = command.split(' ').map(|n| n.to_string());
+        let model_file = self.model_file.clone();
 
-        let t = util::time();
-        let out_name = format!("./logs/worker_{}_{}.out", port, t);
-        let err_name = format!("./logs/worker_{}_{}.err", port, t);
-        let out_log = File::create(out_name).expect("failed to open log");
-        let err_log = File::create(err_name).expect("failed to open log");
+        // Start a new thread to spawn a new process
+        let (pid, ch) = tokio::task::spawn(async move {
+            // Forward worker's logs to a file
+            let t = util::time();
+            let out_name = format!("./logs/worker_{}_{}.out", port, t);
+            let err_name = format!("./logs/worker_{}_{}.err", port, t);
+            let out_log = File::create(out_name).expect("failed to open log");
+            let err_log = File::create(err_name).expect("failed to open log");
 
-        let pid = Command::new(WORKER_BINARY)
-            .env("RUST_LOG", RUST_LOG)
-            .args(args)
-            .stdout(out_log)
-            .stderr(err_log)
-            .spawn()
-            .unwrap()
-            .id();
+            // Spawn the new worker process
+            let command = format!("{} {}", port, model_file);
+            let args = command.split(' ').map(|n| n.to_string());
+            let pid = Command::new(WORKER_BINARY)
+                .env("RUST_LOG", RUST_LOG)
+                .args(args)
+                .stdout(out_log)
+                .stderr(err_log)
+                .spawn()
+                .unwrap()
+                .id();
 
-        info!("manager started new worker process {pid}");
+            info!("manager started new worker process {pid}");
 
-        // Spin until connection succeeds, or times out
-        let conn: Connection;
-        let now = time::Instant::now();
-        loop {
-            // Connect to the new local worker
-            match WorkerClient::connect(format!("http://[::1]:{port}")).await {
-                Ok(c) => {
-                    conn = c;
-                    break;
-                }
-                Err(_) => {
-                    if now.elapsed().as_millis() >= WORKER_TIMEOUT {
-                        return Err(anyhow!("timeout connecting to new worker process"));
+            // Build the rpc endpoint
+            let endpoint =
+                Endpoint::new(format!("http://[::1]:{port}").parse::<Uri>().unwrap()).unwrap();
+
+            // Spin until the connection succeeds
+            let now = time::Instant::now();
+            loop {
+                match endpoint.connect().await {
+                    Ok(channel) => {
+                        return Ok((pid, channel));
+                    }
+                    Err(_) => {
+                        if now.elapsed().as_millis() >= WORKER_TIMEOUT {
+                            return Err(anyhow!("timeout connecting to new worker process"));
+                        }
+                        //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
                 }
             }
-        }
+        })
+        .await
+        .unwrap()
+        .unwrap();
 
-        let handle = Handle { port, pid };
+        let handle = Handle {
+            port,
+            pid,
+            channel: ch,
+        };
 
         info!("manager successfully connected to new worker (port = {port}, pid = {pid})",);
 
-        self.workers.insert(handle.pid, handle.clone());
+        self.workers
+            .insert(handle.pid, (handle.clone(), WorkerStatus::Idle));
         Ok(handle)
-    }
-
-    /// Get a handle to an idle worker, or start a new worker if no workers are currently idle
-    async fn get_idle_worker(&mut self) -> Result<Handle> {
-        // Loop through all registered workers and return the first idle one
-        let mut handles = tokio_stream::iter(self.workers.values());
-        while let Some(handle) = handles.next().await {
-            let req = Request::new(rpc::Empty {});
-            // Reconnent and send request
-            let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
-            let res: WorkerStatus = conn.get_status(req).await?.into_inner().into();
-            match res {
-                WorkerStatus::Idle => {
-                    info!("found an idle worker: no need for a new worker");
-                    return Ok(handle.clone());
-                }
-                _ => continue,
-            }
-        }
-
-        // If there are no idle workers, make a new worker (guaranteed to be idle)
-        info!("all workers are busy: attempting to start a new worker");
-        self.start_new_worker().await
     }
 
     // ----- Interface ----- //
 
-    /// Run inference on an idle worker
-    //#[tracing::instrument]
-    pub async fn run_inference(&mut self, input: InputData) -> Result<Inference> {
-        // Find an idle worker
-        let handle = self.get_idle_worker().await?;
-        debug!("make unlazy inference handle: {handle:?}");
-        // Send req
+    /// Set the status of a worker
+    pub fn set_worker_status(&mut self, pid: u32, status: WorkerStatus) {
+        let (h, _) = self.workers.get(&pid).unwrap();
+        self.workers.insert(pid, (h.clone(), status));
+    }
+
+    /// Run inference on a worker given an RPC channel to the worker
+    pub async fn run_inference(channel: Channel, input: InputData) -> Result<Inference> {
+        let mut worker_client = WorkerClient::new(channel);
         let req = Request::new(input.into());
+        let output: Inference = worker_client
+            .image_inference(req)
+            .await?
+            .into_inner()
+            .into();
 
-        // Reconnent to the RPC client
-        let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
+        Ok(output)
+    }
 
-        // Send an RPC request for inference
-        let res = conn.image_inference(req).await?.into_inner().into();
-        // Ok(Inference::Text("some inference".to_string()))
-        Ok(res)
+    /// Get a handle to an idle worker, if any workers are idle
+    pub fn get_idle_worker(&self) -> Option<Handle> {
+        self.workers
+            .values()
+            .filter(|&(_, s)| s.clone() == WorkerStatus::Idle)
+            .map(|(handle, _)| handle.clone())
+            .collect::<Vec<Handle>>()
+            .first()
+            .cloned()
     }
 
     /// Get the statuses of all workers
-    pub async fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
-        let mut map: HashMap<Handle, WorkerStatus> = HashMap::new();
-
-        //let mut handles = tokio_stream::iter(workers.values().collect::<Vec<&Handle>>());
-        let mut handles = tokio_stream::iter(self.workers.values());
-        while let Some(handle) = handles.next().await {
-            debug!("sending status request to worker pid = {}", handle.pid);
-            let req = Request::new(rpc::Empty {});
-
-            // Reconnect to the worker
-            let mut conn = WorkerClient::connect(format!("http://[::1]:{}", handle.port)).await?;
-            let res = conn.get_status(req).await?.into_inner();
-            debug!("got status of worker: {res:?}");
-            map.insert(handle.clone(), res.into());
-        }
-
-        Ok(map)
+    #[tracing::instrument]
+    pub fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
+        Ok(self
+            .workers
+            .values()
+            .map(|(handle, status)| (handle.clone(), status.clone()))
+            .collect())
     }
 
-    // idea: the Manager is being cloned in the data part of the actix framework
-
     /// Return all the workers, without their status
-    pub fn all_workers(&self) -> Vec<Handle> {
+    #[tracing::instrument]
+    pub fn workers(&self) -> Vec<PartialHandle> {
         self.workers
             .values()
-            .map(|w| Handle {
+            .map(|(w, _)| PartialHandle {
                 pid: w.pid,
                 port: w.port,
             })
@@ -194,24 +204,13 @@ impl Manager {
     }
 
     /// Start a new worker process on the local machine and connect to it
+    #[tracing::instrument]
     pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
         let mut stream = tokio_stream::iter(0..n);
         while let Some(_) = stream.next().await {
             self.start_new_worker().await?;
         }
         Ok(())
-    }
-
-    /// Kill an idle worker and return a partial handle to it
-    pub async fn kill_worker(&mut self) -> Result<Handle> {
-        // Find an idle worker
-        let handle = self.get_idle_worker().await?;
-        let pid = handle.pid;
-        // Remove it from the worker store
-        let handle = self.workers.remove(&pid).unwrap();
-        // Kill the process
-        signal::kill(unistd::Pid::from_raw(pid as i32), signal::Signal::SIGTERM).unwrap();
-        Ok(handle)
     }
 }
 
@@ -226,7 +225,7 @@ impl std::hash::Hash for Handle {
     where
         H: std::hash::Hasher,
     {
-        // Skip hashing the conn
+        // Skip hashing the channel
         (&self.port, &self.pid).hash(state);
     }
 }

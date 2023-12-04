@@ -1,9 +1,7 @@
-use actix_web::{middleware, web, App, HttpServer};
-use autodep::config::RUST_LOG;
-use autodep::manager::Manager;
-use autodep::server::{self, routes};
-use std::sync::{Arc, Mutex};
+use autodep::server::Server;
 use std::{env, io, process};
+
+use autodep::util;
 
 const USAGE: &str = "usage: ./autodep <port> <model file> ";
 
@@ -22,25 +20,8 @@ fn get_args() -> (String, u16) {
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", RUST_LOG);
-    env_logger::init();
-
-    // tracing_subscriber::fmt::init();
+    util::init_logging();
 
     let (model, port) = get_args();
-
-    let manager = web::Data::new(Mutex::new(Manager::new(model.clone())));
-
-    // Start the HTTP server
-    HttpServer::new(move || {
-        App::new()
-            .app_data(manager.clone())
-            .wrap(middleware::Logger::default())
-            .service(routes::image_inference)
-            .service(routes::workers)
-            .service(routes::worker_status)
-    })
-    .bind(format!("0.0.0.0:{port}"))?
-    .run()
-    .await
+    Server::new(model, port).await
 }
