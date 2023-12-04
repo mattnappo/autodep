@@ -309,7 +309,16 @@ impl TorchModel {
         // Save the output image
         output_image.save("output.png").unwrap();
 
-        todo!()
+        let mut image_data: Vec<u8> = Vec::new();
+        output_image
+            .write_to(&mut Cursor::new(&mut image_data), ImageOutputFormat::Png)
+            .unwrap();
+        let b64img = base64::encode(image_data);
+        Ok(Inference::B64Image(B64Image {
+            image: b64img,
+            height: Some(height as u32),
+            width: Some(width as u32),
+        }))
     }
 
     /// Run inference on the loaded model given an `InferenceTask`
@@ -522,7 +531,7 @@ mod tests {
 
         let task = InferenceTask {
             //data: test::load_image_from_disk("images/seg3.jpg".into()),
-            data: test::load_image_from_disk("images/seg3.png".into()),
+            data: test::load_image_from_disk("images/seg1.jpg".into()),
             inference_type: InferenceType::ImageToImage,
         };
         let outputs = loader.run(task).unwrap();
