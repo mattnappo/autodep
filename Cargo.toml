@@ -39,6 +39,7 @@ port_scanner = "0.1.5"
 rand = "0.7"
 nix = { version = "0.27.1", features = ["signal"] }
 base64 = "0.21.5"
+serde_json = "1.0.108"
 
 [build-dependencies]
 tonic-build = "0.10"

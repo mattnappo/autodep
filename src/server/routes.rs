@@ -2,11 +2,11 @@
 //! is the "front end". The inference route is automatically created, and
 //! distributes inference computation across the array of workers.
 
-use super::protocol;
 use super::WebError;
 
 use crate::manager::Manager;
 
+use crate::torch;
 use crate::torch::{Image, InputData};
 use crate::worker::WorkerStatus;
 
@@ -19,28 +19,26 @@ use std::sync::RwLock;
 
 type Result<T> = std::result::Result<T, WebError>;
 
-#[post("/image_inference")]
-pub async fn image_inference(
-    req: web::Json<protocol::B64Image>,
+#[post("/inference")]
+pub async fn inference(
+    req: web::Json<torch::InferenceTask>,
     state: web::Data<RwLock<Manager>>,
 ) -> Result<impl Responder> {
     // Parse the input request
-    let input = {
-        InputData::Image(Image {
-            image: general_purpose::STANDARD.decode(req.image.clone())?,
-            height: None,
-            width: None,
-        })
-    };
+    let input = req.into_inner();
+    info!("got inference request: {:?}", input);
 
     // Get a handle to an idle worker
     let worker = {
         let mut manager = state.write().unwrap();
         let worker = manager.get_idle_worker();
 
+        debug!("found idle worker");
+
         match worker {
             Some(worker) => {
                 manager.set_worker_status(worker.pid, WorkerStatus::Working);
+                debug!("set idle worker to busy");
                 Ok(worker)
             }
             None => {
@@ -52,7 +50,9 @@ pub async fn image_inference(
 
     // Send the inference request to the worker via RPC
     let channel = worker.channel.clone();
+    debug!("sending inference request");
     let output = Manager::run_inference(channel, input).await?;
+    debug!("received inference response");
 
     // Mark the worker as Idle again
     {

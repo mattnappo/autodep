@@ -1,20 +1,18 @@
 //! An inference worker listens for requests from the `Manager` and computes
 //! model inference in an isolated environment
 
+use crate::rpc;
 use crate::rpc::worker_server::{self, WorkerServer};
-use crate::rpc::{ClassOutput, ImageInput};
-use crate::torch::{self};
+use crate::torch;
 
-use anyhow::Result;
 use serde::Serialize;
-
 use std::sync::Arc;
 use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response};
 use tracing::*;
 
-type TResult<T> = Result<T, tonic::Status>;
+type Result<T> = std::result::Result<T, tonic::Status>;
 
 /// The current status of a worker
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -42,7 +40,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(model_file: String, port: u16) -> Result<Self> {
+    pub fn new(model_file: String, port: u16) -> anyhow::Result<Self> {
         Ok(Worker {
             model: Arc::new(torch::TorchModel::new(model_file)?),
             port,
@@ -51,7 +49,7 @@ impl Worker {
 
     /// Start listening for requests
     #[tracing::instrument]
-    pub async fn start(self) -> Result<()> {
+    pub async fn start(self) -> anyhow::Result<()> {
         info!(
             "starting new worker on port {} with model {:?}",
             self.port, self.model
@@ -67,27 +65,30 @@ impl Worker {
         Ok(())
     }
 
+    /*
     /// Run inference on the worker
     #[tracing::instrument]
-    pub fn run(&self, input: torch::InputData) -> Result<torch::Inference> {
+    pub fn run(&self, input: torch::InputData) -> anyhow::Result<torch::Inference> {
         self.model.run(input)
     }
+    */
 }
 
 #[tonic::async_trait]
 impl worker_server::Worker for Worker {
-    async fn image_inference(
+    /// Handle requests for inference, and compute inference on this worker
+    async fn compute_inference(
         &self,
-        _request: Request<ImageInput>,
-    ) -> TResult<Response<ClassOutput>> {
+        request: Request<rpc::InferenceTask>,
+    ) -> Result<Response<rpc::Inference>> {
         info!("worker got inference request");
         // Parse input request
-        let image: torch::InputData = _request.into_inner().into();
+        let task: torch::InferenceTask = request.into_inner().into();
+        debug!("task: {:?}", task);
 
         // Run model inference
         let model = self.model.clone();
-        let res = model.run(image).unwrap();
-        //let res = self.run(image).unwrap();
+        let res = model.run(task).unwrap();
 
         info!("worker successfully computed inference: {res:?}");
         Ok(Response::new(res.into()))

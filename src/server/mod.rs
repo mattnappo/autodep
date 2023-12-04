@@ -22,7 +22,7 @@ impl Server {
             App::new()
                 .app_data(manager.clone())
                 .wrap(middleware::Logger::default())
-                .service(routes::image_inference)
+                .service(routes::inference)
                 .service(routes::workers)
                 .service(routes::worker_status)
         })
