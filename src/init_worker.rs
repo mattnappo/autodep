@@ -4,12 +4,11 @@ use autodep::config::*;
 use autodep::util::init_libtorch;
 use autodep::worker::Worker;
 use std::{env, process};
-use tokio::fs;
 
 const USAGE: &str = "usage: ./worker <port> <model file> ";
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     init_libtorch();
     std::env::set_var("RUST_LOG", RUST_LOG);
     //env_logger::init();
@@ -25,9 +24,5 @@ async fn main() {
     let model = args[2].clone();
     let worker = Worker::new(model, port).unwrap();
 
-    let serve = tokio::spawn(async move {
-        worker.start().await.unwrap();
-    });
-
-    tokio::join!(serve, fs::write(format!("./tmp/{port}_ready"), ""));
+    worker.start().await
 }

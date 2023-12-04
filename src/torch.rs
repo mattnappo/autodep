@@ -41,9 +41,6 @@ pub enum InputData {
 /// Load and run a TorchScript file
 #[derive(Debug)]
 pub struct TorchModel {
-    /// TorchScript filename
-    filename: String,
-
     /// The loaded torch model
     model: tch::jit::CModule,
     // ModelType (classifier, etc...)
@@ -52,7 +49,6 @@ pub struct TorchModel {
 impl TorchModel {
     pub fn new(filename: String) -> Result<Self> {
         Ok(TorchModel {
-            filename: filename.clone(),
             model: tch::CModule::load(filename)?,
         })
     }

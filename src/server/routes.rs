@@ -4,26 +4,18 @@
 
 use super::protocol;
 use super::WebError;
-use crate::config::*;
-use crate::manager::Handle;
+
 use crate::manager::Manager;
-use crate::rpc::worker_client::WorkerClient;
-use crate::torch::Inference;
+
 use crate::torch::{Image, InputData};
 use crate::worker::WorkerStatus;
-use actix_web::http::header::ContentType;
-use actix_web::http::StatusCode;
-use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
+
+use actix_web::{get, post, web, HttpRequest, Responder};
 use anyhow::anyhow;
-use base64::{
-    alphabet,
-    engine::{self, general_purpose},
-    Engine as _,
-};
-use log::*;
-use std::sync::Mutex;
+use base64::{engine::general_purpose, Engine as _};
+use tracing::*;
+
 use std::sync::RwLock;
-use tonic::{transport::Channel, Request as RpcRequest, Response as RpcResponse};
 
 type Result<T> = std::result::Result<T, WebError>;
 

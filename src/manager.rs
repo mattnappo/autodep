@@ -3,30 +3,27 @@
 //! forwards inference requests
 
 use crate::config::{self, *};
-use crate::rpc::{self, worker_client::WorkerClient};
+use crate::rpc::worker_client::WorkerClient;
 use crate::torch::Inference;
 use crate::torch::InputData;
 use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
-use nix::{sys::signal, unistd};
-use serde::ser::{Serialize, Serializer};
+
+use serde::ser::Serialize;
 use serde::Serialize as DeriveSerialize;
 use std::collections::HashMap;
 use std::fs::File;
-use std::process::{Command, Stdio};
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
-use std::{thread, time};
-use tch::IndexOp;
-use tokio::fs;
+use std::process::Command;
+
+use std::time;
+
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
 use tonic::transport::Uri;
-use tonic::{Request, Response};
+use tonic::Request;
 use tracing::*;
 
 /// A handle to a worker
