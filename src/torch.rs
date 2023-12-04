@@ -8,18 +8,65 @@ use base64::{
     Engine as _,
 };
 
+use base64;
 use image::{codecs::png::PngEncoder, DynamicImage, ImageBuffer, ImageOutputFormat, Rgb};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use tch::vision::imagenet;
 use tch::{no_grad, vision, Device, IValue, Kind, Tensor};
 
-/// An in-memory representation of an image. Can be the input or output of a model
+/// An in-memory representation of an image (not base 64). Can be the input or output of a model
 #[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct Image {
     pub(crate) image: Vec<u8>,
     pub(crate) height: Option<u32>,
     pub(crate) width: Option<u32>,
+}
+
+/// A base 64 image
+#[derive(Serialize, Deserialize, Debug)]
+pub struct B64Image {
+    pub image: String,
+    pub height: Option<u32>,
+    pub width: Option<u32>,
+}
+
+impl From<B64Image> for Image {
+    fn from(b64_img: B64Image) -> Image {
+        let image = base64::decode(&b64_img.image).unwrap_or_else(|_| Vec::new());
+        Image {
+            image,
+            height: b64_img.height,
+            width: b64_img.width,
+        }
+    }
+}
+
+impl From<rpc::B64Image> for B64Image {
+    fn from(b64_img: rpc::B64Image) -> Self {
+        B64Image {
+            image: b64_img.image,
+            height: b64_img.height,
+            width: b64_img.width,
+        }
+    }
+}
+
+impl From<Image> for B64Image {
+    fn from(img: Image) -> B64Image {
+        let image = base64::encode(&img.image);
+        B64Image {
+            image,
+            height: img.height,
+            width: img.width,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub enum InferenceRequest {
+    Image(B64Image),
+    Text(String),
 }
 
 /// A class prediction outputted by a classifier model
@@ -34,8 +81,8 @@ pub struct Class {
 pub enum Inference {
     Text(String),
     Classification(Vec<Class>),
-    Image(Image),
-    B64Image(String),
+    //Image(Image),
+    B64Image(B64Image),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -53,10 +100,11 @@ pub enum InferenceType {
 }
 
 /// Input data that inference can be computed on
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub enum InputData {
     Text(String),
-    Image(Image),
+    //Image(Image),
+    B64Image(B64Image),
 }
 
 /// The input to this module's ML engine -- a request for inference
@@ -145,23 +193,28 @@ impl TorchModel {
                 .unwrap();
         }
 
-        // Encode the buffer as base-64
-        let b64_image = general_purpose::STANDARD.encode(&buffer);
+        let img = Image {
+            image: buffer,
+            height: Some(height as u32),
+            width: Some(width as u32),
+        };
 
-        Ok(Inference::B64Image(b64_image))
+        // Encode the buffer as base-64
+
+        Ok(Inference::B64Image(img.into()))
     }
 
     /// Run inference on the loaded model given an `InferenceTask`
     pub fn run(&self, task: InferenceTask) -> Result<Inference> {
         match task.inference_type {
             InferenceType::ImageClassification { top_n } => match task.data {
-                InputData::Image(image) => Ok(self.image_classification(image, top_n)?),
+                InputData::B64Image(image) => Ok(self.image_classification(image.into(), top_n)?),
                 _ => Err(anyhow!(
                     "invalid input type for ImageClassification inference"
                 )),
             },
             InferenceType::ImageToImage => match task.data {
-                InputData::Image(image) => Ok(self.image_to_image(image)?),
+                InputData::B64Image(image) => Ok(self.image_to_image(image.into())?),
                 _ => Err(anyhow!("invalid input type for ImageToImage inference")),
             },
             _ => Err(anyhow!("that inference type is not currently supported")),
@@ -196,14 +249,10 @@ impl From<Inference> for rpc::Inference {
                 classification: None,
             },
             Inference::Classification(c) => c.into(),
-            Inference::Image(_image) => {
-                // my X-to-image code should always ret a b64 image
-                unimplemented!()
-            }
             Inference::B64Image(byte_str) => rpc::Inference {
                 image: Some(rpc::B64Image {
                     //image: byte_str.as_bytes().to_vec(),
-                    image: byte_str.into(),
+                    image: byte_str.image,
                     height: None,
                     width: None,
                 }),
@@ -217,7 +266,7 @@ impl From<Inference> for rpc::Inference {
 impl From<rpc::B64Image> for Image {
     fn from(image: rpc::B64Image) -> Image {
         Image {
-            image: image.image,
+            image: base64::decode(image.image).unwrap(),
             height: image.height,
             width: image.width,
         }
@@ -233,7 +282,7 @@ impl From<rpc::InferenceTask> for InferenceTask {
         {
             // ImageClassification
             0 => InferenceTask {
-                data: InputData::Image(
+                data: InputData::B64Image(
                     task.image
                         .expect("must provide image for ImageClassification inference")
                         .into(),
@@ -244,7 +293,7 @@ impl From<rpc::InferenceTask> for InferenceTask {
             },
             // ImageToImage
             1 => InferenceTask {
-                data: InputData::Image(
+                data: InputData::B64Image(
                     task.image
                         .expect("must provide image for ImageToImage inference")
                         .into(),
@@ -265,7 +314,42 @@ impl From<rpc::InferenceTask> for InferenceTask {
 
 impl From<InferenceTask> for rpc::InferenceTask {
     fn from(task: InferenceTask) -> rpc::InferenceTask {
-        todo!()
+        match task.inference_type {
+            InferenceType::ImageClassification { top_n } => rpc::InferenceTask {
+                inference_type: Some(rpc::InferenceType {
+                    r#type: 0,
+                    top_n: Some(top_n as u32),
+                }),
+                image: match task.data {
+                    InputData::B64Image(img) => Some(rpc::B64Image {
+                        image: img.image,
+                        height: img.height,
+                        width: img.width,
+                    }),
+                    InputData::Text(_) => None,
+                },
+                text: None,
+            },
+            InferenceType::ImageToImage => {
+                rpc::InferenceTask {
+                    inference_type: Some(rpc::InferenceType {
+                        r#type: 1,
+                        top_n: None,
+                    }),
+                    image: match task.data {
+                        InputData::B64Image(img) => Some(rpc::B64Image {
+                            //image: img.image.into(),
+                            image: img.image,
+                            height: img.height,
+                            width: img.width,
+                        }),
+                        InputData::Text(_) => None,
+                    },
+                    text: None,
+                }
+            }
+            InferenceType::TextToText => todo!(),
+        }
     }
 }
 

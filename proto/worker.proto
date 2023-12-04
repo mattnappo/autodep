@@ -6,7 +6,8 @@ message Empty {}
 
 // A base 64-encoded image. Can be the input to inference, or inference output
 message B64Image {
-    bytes image = 1;
+    //bytes image = 1;
+    string image = 1;
     optional uint32 height = 2;
     optional uint32 width = 3;
 }

@@ -71,11 +71,14 @@ pub mod util {
             let mut image: Vec<u8> = vec![];
             file.read_to_end(&mut image).unwrap();
 
-            crate::torch::InputData::Image(crate::torch::Image {
-                image,
-                height: None,
-                width: None,
-            })
+            crate::torch::InputData::B64Image(
+                crate::torch::Image {
+                    image,
+                    height: None,
+                    width: None,
+                }
+                .into(),
+            )
         }
 
         pub fn load_image_from_disk(path: String) -> crate::torch::InputData {
@@ -83,11 +86,14 @@ pub mod util {
             let mut image: Vec<u8> = vec![];
             file.read_to_end(&mut image).unwrap();
 
-            crate::torch::InputData::Image(crate::torch::Image {
-                image,
-                height: None,
-                width: None,
-            })
+            crate::torch::InputData::B64Image(
+                crate::torch::Image {
+                    image,
+                    height: None,
+                    width: None,
+                }
+                .into(),
+            )
         }
     }
 }
