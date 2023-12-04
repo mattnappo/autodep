@@ -1,11 +1,24 @@
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
-# Load the model and tokenizer
-tokenizer = GPT2Tokenizer.from_pretrained("facebook/opt-125m")
-model = GPT2LMHeadModel.from_pretrained("facebook/opt-125m")
+checkpoint = "Salesforce/codegen-350M-mono"
 
-# Convert the model to TorchScript
-scripted_model = torch.jit.script(model)
+model = AutoModelForCausalLM.from_pretrained(checkpoint)
 
-# Save the TorchScript model
-scripted_model.save("opt-125m.pt")
+tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+
+text = "def hello_world():"
+
+tokens = tokenizer(text, return_tensors="pt")
+
+print(tokenizer(text, return_tensors="pt"))
+
+model.eval()
+completion = model.generate(input_ids=tokens['input_ids'], attention_mask=tokens['attention_mask'])
+
+print(tokenizer.decode(completion[0]))
+
+
+# Creating the trace
+traced_model = torch.jit.trace(model, [tokens['input_ids'], tokens['attention_mask']])
+#torch.jit.save(traced_model, "traced_bert.pt")
