@@ -1,16 +1,14 @@
 //! An inference worker listens for requests from the `Manager` and computes
 //! model inference in an isolated environment
 
-
 use crate::rpc::worker_server::{self, WorkerServer};
 use crate::rpc::{ClassOutput, ImageInput};
 use crate::torch::{self};
 
-
 use anyhow::Result;
 use serde::Serialize;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response};
