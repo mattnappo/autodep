@@ -32,9 +32,6 @@ pub mod config {
 
     /// Spot workers are one-time-use workers
     pub const SPOT_WORKERS: bool = false;
-
-    /// Pick `TOP_N` largest softmax probabilities in a classifier model
-    pub const TOP_N: i64 = 5;
 }
 
 /// Network utility functions
@@ -71,6 +68,18 @@ pub mod util {
         /// Get a test image
         pub fn get_test_image() -> crate::torch::InputData {
             let mut file = std::fs::File::open("images/cat.png").unwrap();
+            let mut image: Vec<u8> = vec![];
+            file.read_to_end(&mut image).unwrap();
+
+            crate::torch::InputData::Image(crate::torch::Image {
+                image,
+                height: None,
+                width: None,
+            })
+        }
+
+        pub fn load_image_from_disk(path: String) -> crate::torch::InputData {
+            let mut file = std::fs::File::open(path).unwrap();
             let mut image: Vec<u8> = vec![];
             file.read_to_end(&mut image).unwrap();
 

@@ -19,10 +19,11 @@ path = "src/lib.rs"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream = "0.1.14"
 
-# for worker rpc server
+# for worker
 tonic = "0.10"
 prost = "0.12"
 tch = { version = "0.14.0", features = [ "download-libtorch" ] }
+image = "0.24.7"
 
 # for http server
 actix-web = "4.4.0"
