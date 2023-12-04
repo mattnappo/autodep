@@ -2,11 +2,11 @@
 //! is the "front end". The inference route is automatically created, and
 //! distributes inference computation across the array of workers.
 
-use super::protocol;
 use super::WebError;
 
 use crate::manager::Manager;
 
+use crate::torch;
 use crate::torch::{Image, InputData};
 use crate::worker::WorkerStatus;
 
@@ -19,19 +19,13 @@ use std::sync::RwLock;
 
 type Result<T> = std::result::Result<T, WebError>;
 
-#[post("/image_inference")]
-pub async fn image_inference(
-    req: web::Json<protocol::B64Image>,
+#[post("/inference")]
+pub async fn inference(
+    req: web::Json<torch::InferenceTask>,
     state: web::Data<RwLock<Manager>>,
 ) -> Result<impl Responder> {
     // Parse the input request
-    let input = {
-        InputData::Image(Image {
-            image: general_purpose::STANDARD.decode(req.image.clone())?,
-            height: None,
-            width: None,
-        })
-    };
+    let input = req.into_inner();
 
     // Get a handle to an idle worker
     let worker = {

@@ -5,7 +5,7 @@ package worker;
 message Empty {}
 
 // A base 64-encoded image. Can be the input to inference, or inference output
-message Image {
+message B64Image {
     bytes image = 1;
     optional uint32 height = 2;
     optional uint32 width = 3;
@@ -26,23 +26,19 @@ message Classes {
 message InferenceType {
     enum Type {
         ImageClassification = 0;
-        Image = 1;
-        SentimentAnalysis = 2;
+        ImageToImage = 1;
+        TextToText = 2;
     }
 
-    Type type = 1;
+    Type type_ = 1;
     optional uint32 top_n = 2; // only for ImageClassification
 }
 
 // A request for inference
 message InferenceTask {
     InferenceType inference_type = 1;
-    optional Image image = 2; // For image-to-X tasks
+    optional B64Image image = 2; // For image-to-X tasks
     optional string text = 3; // For text-to-X tasks
-}
-
-message B64Image {
-    string image = 1;
 }
 
 // An inference response -- the output of a model
@@ -56,3 +52,4 @@ message Inference {
 service Worker {
     rpc ComputeInference(InferenceTask) returns (Inference) {}
 }
+

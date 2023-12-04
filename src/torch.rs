@@ -9,13 +9,13 @@ use base64::{
 };
 
 use image::{codecs::png::PngEncoder, DynamicImage, ImageBuffer, ImageOutputFormat, Rgb};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use tch::vision::imagenet;
 use tch::{no_grad, vision, Device, IValue, Kind, Tensor};
 
 /// An in-memory representation of an image. Can be the input or output of a model
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct Image {
     pub(crate) image: Vec<u8>,
     pub(crate) height: Option<u32>,
@@ -38,7 +38,7 @@ pub enum Inference {
     B64Image(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 /// The type of inference to compute
 pub enum InferenceType {
     /// `InputData::Image` to `Inference::Classification`
@@ -49,17 +49,18 @@ pub enum InferenceType {
     ImageToImage,
 
     /// `InputData::Text` to `Inference::Text`, for NLP tasks
-    SentimentAnalysis,
+    TextToText,
 }
 
 /// Input data that inference can be computed on
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub enum InputData {
     Text(String),
     Image(Image),
 }
 
 /// The input to this module's ML engine -- a request for inference
+#[derive(Deserialize)]
 pub struct InferenceTask {
     data: InputData,
     inference_type: InferenceType,
@@ -168,41 +169,6 @@ impl TorchModel {
     }
 }
 
-impl From<rpc::ImageInput> for InputData {
-    fn from(img: rpc::ImageInput) -> Self {
-        InputData::Image(Image {
-            image: img.image,
-            height: Some(img.height).filter(|x| *x != 0),
-            width: Some(img.width).filter(|x| *x != 0),
-        })
-    }
-}
-
-impl From<InputData> for rpc::ImageInput {
-    fn from(input: InputData) -> Self {
-        match input {
-            InputData::Image(img) => Self {
-                image: img.image,
-                height: img.height.unwrap_or(0),
-                width: img.width.unwrap_or(0),
-            },
-            InputData::Text(_) => todo!(),
-        }
-    }
-}
-
-impl From<rpc::ClassOutput> for Inference {
-    fn from(data: rpc::ClassOutput) -> Self {
-        data.classes
-            .into_iter()
-            .map(|c| Class {
-                probability: Some(c.probability),
-                label: Some(c.label).filter(|x| x != ""),
-            })
-            .collect()
-    }
-}
-
 impl From<Vec<Class>> for rpc::Inference {
     fn from(classes: Vec<Class>) -> Self {
         rpc::Inference {
@@ -235,11 +201,77 @@ impl From<Inference> for rpc::Inference {
                 unimplemented!()
             }
             Inference::B64Image(byte_str) => rpc::Inference {
-                image: Some(rpc::B64Image { image: byte_str }),
+                image: Some(rpc::B64Image {
+                    //image: byte_str.as_bytes().to_vec(),
+                    image: byte_str.into(),
+                    height: None,
+                    width: None,
+                }),
                 text: None,
                 classification: None,
             },
         }
+    }
+}
+
+impl From<rpc::B64Image> for Image {
+    fn from(image: rpc::B64Image) -> Image {
+        Image {
+            image: image.image,
+            height: image.height,
+            width: image.width,
+        }
+    }
+}
+
+impl From<rpc::InferenceTask> for InferenceTask {
+    fn from(task: rpc::InferenceTask) -> InferenceTask {
+        match task
+            .inference_type
+            .expect("must provide inference type")
+            .r#type
+        {
+            // ImageClassification
+            0 => InferenceTask {
+                data: InputData::Image(
+                    task.image
+                        .expect("must provide image for ImageClassification inference")
+                        .into(),
+                ),
+                inference_type: InferenceType::ImageClassification {
+                    top_n: task.inference_type.unwrap().top_n.unwrap() as u16,
+                },
+            },
+            // ImageToImage
+            1 => InferenceTask {
+                data: InputData::Image(
+                    task.image
+                        .expect("must provide image for ImageToImage inference")
+                        .into(),
+                ),
+                inference_type: InferenceType::ImageToImage,
+            },
+            // TextToText
+            2 => InferenceTask {
+                data: InputData::Text(
+                    task.text
+                        .expect("must provide text for TextToText inference"),
+                ),
+                inference_type: InferenceType::TextToText,
+            },
+        }
+    }
+}
+
+impl From<InferenceTask> for rpc::InferenceTask {
+    fn from(task: InferenceTask) -> rpc::InferenceTask {
+        todo!()
+    }
+}
+
+impl From<rpc::Inference> for Inference {
+    fn from(inference: rpc::Inference) -> Inference {
+        todo!()
     }
 }
 

@@ -4,8 +4,7 @@
 
 use crate::config::{self, *};
 use crate::rpc::worker_client::WorkerClient;
-use crate::torch::Inference;
-use crate::torch::InputData;
+use crate::torch;
 use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
@@ -158,11 +157,14 @@ impl Manager {
     }
 
     /// Run inference on a worker given an RPC channel to the worker
-    pub async fn run_inference(channel: Channel, input: InputData) -> Result<Inference> {
+    pub async fn run_inference(
+        channel: Channel,
+        input: torch::InferenceTask,
+    ) -> Result<torch::Inference> {
         let mut worker_client = WorkerClient::new(channel);
         let req = Request::new(input.into());
-        let output: Inference = worker_client
-            .image_inference(req)
+        let output: torch::Inference = worker_client
+            .compute_inference(req)
             .await?
             .into_inner()
             .into();
