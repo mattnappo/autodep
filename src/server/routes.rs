@@ -42,9 +42,10 @@ pub async fn inference(
                 Ok::<manager::Handle, anyhow::Error>(worker)
             }
             None => {
-                warn!("all workers are busy: starting a new worker");
+                warn!("all workers are busy");
                 if config::AUTO_SCALE {
                     // Start a new worker
+                    info!("dynamically starting a new worker");
                     manager.start_new_workers(1).await?;
                     let worker = {
                         let worker = manager.get_idle_worker();
@@ -85,7 +86,7 @@ pub async fn inference(
 }
 
 /// HTTP request to get the status of all workers
-#[get("/workers/status")]
+#[get("/workers/_status")]
 pub async fn worker_status(
     _req: HttpRequest,
     state: web::Data<RwLock<Manager>>,
@@ -99,7 +100,7 @@ pub async fn worker_status(
 }
 
 /// HTTP request to get all Working workers
-#[get("/workers/all")]
+#[get("/workers")]
 pub async fn all_workers(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
     let workers = {
         let manager = state.read().unwrap();
@@ -110,7 +111,7 @@ pub async fn all_workers(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -
 }
 
 /// HTTP request to get server statistics
-#[get("/workers/info")]
+#[get("/workers/_info")]
 pub async fn worker_info(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
     let manager = state.read().unwrap();
 

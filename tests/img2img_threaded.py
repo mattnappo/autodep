@@ -15,12 +15,14 @@ import threading
 import time
 
 def thread_function(name):
+    print(f"------STARTED NEW THREAD------\nname:{name}\n")
     headers = {'Content-type': 'application/json'}
     data = d
 
-    for i in range(3):
+    for i in range(10):
         x = requests.post("http://localhost:9000/inference", data=data, headers=headers)
-        print(x.json())
+        #print(x.json())
+        print(x.elapsed.total_seconds())
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
@@ -40,10 +42,18 @@ if __name__ == "__main__":
     w = threading.Thread(target=thread_function, args=(1,))
     w.start()
 
+    a = threading.Thread(target=thread_function, args=(1,))
+    a.start()
+
+    b = threading.Thread(target=thread_function, args=(1,))
+    b.start()
+
     x.join()
     y.join()
     z.join()
     w.join()
+    a.join()
+    b.join()
     print("done")
 
 
