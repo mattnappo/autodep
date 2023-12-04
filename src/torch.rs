@@ -231,17 +231,14 @@ impl TorchModel {
     pub fn text_to_text(&self, task: InferenceTask) -> Result<Inference> {
         let device = Device::Cpu;
 
-        // Load the TorchScript file
-        let model = CModule::load("models/traced_bert_model.pt").unwrap();
-
         // Create example input tensor
-        let input_ids = Tensor::of_slice(&[0, 1, 2, 3, 4]).to_device(device);
-        let attention_mask = Tensor::of_slice(&[1, 1, 1, 1, 1]).to_device(device);
-        let token_type_ids = Tensor::of_slice(&[0, 0, 0, 0, 0]).to_device(device);
+        let input_ids = Tensor::from_slice(&[0, 1, 2, 3, 4]).to_device(device);
+        let attention_mask = Tensor::from_slice(&[1, 1, 1, 1, 1]).to_device(device);
+        let token_type_ids = Tensor::from_slice(&[0, 0, 0, 0, 0]).to_device(device);
 
         // Run the model with no_grad to prevent tracking history
         let result = no_grad(|| {
-            model
+            self.model
                 .forward_ts(&[
                     input_ids.unsqueeze(0),
                     attention_mask.unsqueeze(0),
@@ -483,5 +480,16 @@ mod tests {
         };
 
         println!("{}", serde_json::to_string(&task).unwrap());
+    }
+
+    #[test]
+    fn test_bert() {
+        let loader = TorchModel::new("models/bert.pt".into()).unwrap();
+        let task = InferenceTask {
+            data: InputData::Text("hello <mask> is a common beginner programm".into()),
+            inference_type: InferenceType::TextToText,
+        };
+        let outputs = loader.run(task).unwrap();
+        println!("outputs: {outputs:#?}");
     }
 }
