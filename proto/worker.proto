@@ -22,5 +22,4 @@ message ClassOutput {
 
 service Worker {
     rpc ImageInference(ImageInput) returns (ClassOutput) {}
-    rpc Shutdown(Empty) returns (Empty) {}
 }

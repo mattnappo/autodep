@@ -166,8 +166,7 @@ impl Manager {
         let req = Request::new(input.into());
         let output: Inference = worker_client
             .image_inference(req)
-            .await
-            .unwrap()
+            .await?
             .into_inner()
             .into();
 

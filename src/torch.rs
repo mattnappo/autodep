@@ -38,6 +38,52 @@ pub enum InputData {
     Image(Image),
 }
 
+/// Load and run a TorchScript file
+#[derive(Debug)]
+pub struct TorchModel {
+    /// TorchScript filename
+    filename: String,
+
+    /// The loaded torch model
+    model: tch::jit::CModule,
+    // ModelType (classifier, etc...)
+}
+
+impl TorchModel {
+    pub fn new(filename: String) -> Result<Self> {
+        Ok(TorchModel {
+            filename: filename.clone(),
+            model: tch::CModule::load(filename)?,
+        })
+    }
+
+    /// Run inference on the loaded model
+    /// Right now this function is not very general, and is somewhat hardcoded
+    /// for imagenet. Will circle back later
+    pub fn run(&self, input: InputData) -> Result<Inference> {
+        //tokio::time::sleep(std::time::Duration::from_millis(5000)); // -- not working
+        match input {
+            InputData::Text(_) => todo!(),
+            InputData::Image(image) => {
+                let image = imagenet::load_image_from_memory(&image.image)?;
+                let output = self
+                    .model
+                    .forward_ts(&[image.unsqueeze(0)])?
+                    .softmax(-1, Some(tch::kind::Kind::Float));
+                let classes = imagenet::top(&output, TOP_N)
+                    .iter()
+                    .map(|(p, l)| Class {
+                        probability: Some(*p),
+                        class: None,
+                        label: Some(l.into()),
+                    })
+                    .collect();
+                Ok(Inference::Classes(classes))
+            }
+        }
+    }
+}
+
 impl From<rpc::ImageInput> for InputData {
     fn from(img: rpc::ImageInput) -> Self {
         InputData::Image(Image {
@@ -94,52 +140,6 @@ impl From<Inference> for rpc::ClassOutput {
                 }
             }
             _ => todo!(),
-        }
-    }
-}
-
-/// Load and run a TorchScript file
-#[derive(Debug)]
-pub struct TorchModel {
-    /// TorchScript filename
-    filename: String,
-
-    /// The loaded torch model
-    model: tch::jit::CModule,
-    // ModelType (classifier, etc...)
-}
-
-impl TorchModel {
-    pub fn new(filename: String) -> Result<Self> {
-        Ok(TorchModel {
-            filename: filename.clone(),
-            model: tch::CModule::load(filename)?,
-        })
-    }
-
-    /// Run inference on the loaded model
-    /// Right now this function is not very general, and is somewhat hardcoded
-    /// for imagenet. Will circle back later
-    pub fn run(&self, input: InputData) -> Result<Inference> {
-        //tokio::time::sleep(std::time::Duration::from_millis(5000)); // -- not working
-        match input {
-            InputData::Text(_) => todo!(),
-            InputData::Image(image) => {
-                let image = imagenet::load_image_from_memory(&image.image)?;
-                let output = self
-                    .model
-                    .forward_ts(&[image.unsqueeze(0)])?
-                    .softmax(-1, Some(tch::kind::Kind::Float));
-                let classes = imagenet::top(&output, TOP_N)
-                    .iter()
-                    .map(|(p, l)| Class {
-                        probability: Some(*p),
-                        class: None,
-                        label: Some(l.into()),
-                    })
-                    .collect();
-                Ok(Inference::Classes(classes))
-            }
         }
     }
 }
