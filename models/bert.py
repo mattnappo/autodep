@@ -27,7 +27,7 @@ with torch.no_grad():
     outputs = model(**inputs)
 
 # Creating the trace
-traced_model = torch.jit.trace(model, (inputs['input_ids'], inputs['attention_mask'], inputs['token_type_ids']), strict=False)
+traced_model = torch.jit.script(model, (inputs['input_ids'], inputs['attention_mask'], inputs['token_type_ids']), strict=False)
 
 # Save the traced model
-traced_model.save("traced_bert_model.pt")
+traced_model.save("scripted_bert_model.pt")
