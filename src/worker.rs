@@ -88,7 +88,6 @@ impl Worker {
 
 #[tonic::async_trait]
 impl worker_server::Worker for Worker {
-    /*
     async fn image_inference(
         &self,
         _request: Request<ImageInput>,
@@ -101,52 +100,48 @@ impl worker_server::Worker for Worker {
         //actix_web::rt::time::sleep(std::time::Duration::from_millis(4000)).await;
 
         // Run inference in a separate thread
-        let output = actix_web::rt::task::spawn_blocking(move || {
-            let res = model.run(image);
-            res
-        })
-        .await
-        .unwrap();
+        let res = model.run(image).unwrap();
 
-        info!("worker successfully computed inference: {output:?}");
-        Ok(Response::new(output.unwrap().into()))
+        info!("worker successfully computed inference: {res:?}");
+        Ok(Response::new(res.into()))
     }
+
+    /*
+        #[tracing::instrument]
+        async fn image_inference(
+            &self,
+            _request: Request<ImageInput>,
+        ) -> TResult<Response<ClassOutput>> {
+            info!("worker got FAKE inference request");
+
+            /*
+            let output = actix_web::rt::task::spawn_blocking(move || ClassOutput {
+                classes: vec![Classification {
+                    probability: 0.4,
+                    class_int: 3,
+                    label: "book".to_string(),
+                }],
+                num_classes: 919,
+            })
+            .await
+            .unwrap();
+            */
+
+            let img = self.test_image.clone();
+            let model = self.model.clone();
+
+            let output = tokio::task::spawn(async move {
+                let i = img.lock().unwrap();
+                let output = model.run(i.clone()).unwrap();
+                output
+            })
+            .await
+            .unwrap();
+
+            info!("worker successfully FAKED inference: {output:?}");
+            return Ok(Response::new(output.into()));
+        }
     */
-
-    #[tracing::instrument]
-    async fn image_inference(
-        &self,
-        _request: Request<ImageInput>,
-    ) -> TResult<Response<ClassOutput>> {
-        info!("worker got FAKE inference request");
-
-        /*
-        let output = actix_web::rt::task::spawn_blocking(move || ClassOutput {
-            classes: vec![Classification {
-                probability: 0.4,
-                class_int: 3,
-                label: "book".to_string(),
-            }],
-            num_classes: 919,
-        })
-        .await
-        .unwrap();
-        */
-
-        let img = self.test_image.clone();
-        let model = self.model.clone();
-
-        let output = tokio::task::spawn(async move {
-            let i = img.lock().unwrap();
-            let output = model.run(i.clone()).unwrap();
-            output
-        })
-        .await
-        .unwrap();
-
-        info!("worker successfully FAKED inference: {output:?}");
-        return Ok(Response::new(output.into()));
-    }
 
     // DEPRECATED
     async fn shutdown(&self, _request: Request<Empty>) -> TResult<Response<Empty>> {

@@ -27,24 +27,12 @@ use tonic::{transport::Channel, Request as RpcRequest, Response as RpcResponse};
 
 type Result<T> = std::result::Result<T, WebError>;
 
-async fn connect_to_worker(channel: Channel, input: InputData) -> Result<Inference> {
-    let mut worker_client = WorkerClient::new(channel);
-    let req = RpcRequest::new(input.into());
-    let output: Inference = worker_client
-        .image_inference(req)
-        .await
-        .unwrap()
-        .into_inner()
-        .into();
-
-    Ok(output)
-}
-
 #[post("/image_inference")]
 pub async fn image_inference(
     req: web::Json<protocol::B64Image>,
     state: web::Data<RwLock<Manager>>,
 ) -> Result<impl Responder> {
+    // Parse the input request
     let input = {
         InputData::Image(Image {
             image: general_purpose::STANDARD.decode(req.image.clone())?,
@@ -53,37 +41,31 @@ pub async fn image_inference(
         })
     };
 
+    // Get a handle to an idle worker
     let worker = {
         let mut manager = state.write().unwrap();
-        let worker = manager
-            .workers
-            .values()
-            .filter(|&(_, s)| s.clone() == WorkerStatus::Idle)
-            .map(|(handle, _)| handle.clone())
-            .collect::<Vec<Handle>>()
-            .first()
-            .cloned();
+        let worker = manager.get_idle_worker();
 
         match worker {
             Some(worker) => {
-                manager.mark_working(worker.pid);
+                manager.set_worker_status(worker.pid, WorkerStatus::Working);
                 Ok(worker)
             }
             None => {
-                info!("all workers are busy: come back later");
-                Err(anyhow!(
-                    "all workers are busy. chose not to make a new worker"
-                ))
+                warn!("all workers are busy: retry again later");
+                Err(anyhow!("all workers are busy: retry again later"))
             }
         }
     }?;
 
+    // Send the inference request to the worker via RPC
     let channel = worker.channel.clone();
-    let output = connect_to_worker(channel, input).await?;
+    let output = Manager::run_inference(channel, input).await?;
 
+    // Mark the worker as Idle again
     {
         let mut manager = state.write().unwrap();
-        manager.mark_idle(worker.pid);
+        manager.set_worker_status(worker.pid, WorkerStatus::Idle);
     }
 
     info!("finished serving inference request");
@@ -97,27 +79,12 @@ pub async fn worker_status(
     _req: HttpRequest,
     state: web::Data<RwLock<Manager>>,
 ) -> Result<impl Responder> {
-    //let manager = state.read().unwrap();
-
-    /*
-    let status = manager.all_status().await;
-    match status {
-        Ok(s) => Ok(web::Json(protocol::AllStatusResponse(s))),
-        Err(e) => Err(WebError { err: e }),
-    }
-    */
-
-    let idling = {
+    let status = {
         let manager = state.read().unwrap();
-        (*manager)
-            .workers
-            .values()
-            //.filter(|&(_, s)| s.clone() == WorkerStatus::Idle)
-            .map(|(handle, status)| (handle.clone(), status.clone()))
-            .collect::<Vec<(Handle, WorkerStatus)>>()
+        manager.all_status().unwrap()
     };
 
-    Ok(web::Json(idling))
+    Ok(web::Json(status))
 }
 
 /// HTTP request to get server statistics
@@ -125,7 +92,6 @@ pub async fn worker_status(
 pub async fn workers(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
     let manager = state.read().unwrap();
 
-    let workers = manager.all_workers();
-    warn!("Workers: {workers:#?}");
+    let workers = manager.workers();
     web::Json(workers)
 }
