@@ -110,8 +110,8 @@ pub enum InputData {
 /// The input to this module's ML engine -- a request for inference
 #[derive(Deserialize)]
 pub struct InferenceTask {
-    data: InputData,
-    inference_type: InferenceType,
+    pub data: InputData,
+    pub inference_type: InferenceType,
 }
 
 /// Load and run a TorchScript file
@@ -348,14 +348,32 @@ impl From<InferenceTask> for rpc::InferenceTask {
                     text: None,
                 }
             }
-            InferenceType::TextToText => todo!(),
+            InferenceType::TextToText => unimplemented!(),
         }
     }
 }
 
+/*
 impl From<rpc::Inference> for Inference {
     fn from(inference: rpc::Inference) -> Inference {
-        todo!()
+        Inference {
+            data: inference.data,
+            inference_type: inference.inference_type,
+        }
+    }
+}
+*/
+
+impl From<rpc::Classes> for Vec<Class> {
+    fn from(classes: rpc::Classes) -> Vec<Class> {
+        classes
+            .classes
+            .into_iter()
+            .map(|c| Class {
+                probability: c.probability,
+                label: c.label,
+            })
+            .collect()
     }
 }
 

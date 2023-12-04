@@ -3,6 +3,7 @@
 //! forwards inference requests
 
 use crate::config::{self, *};
+use crate::rpc;
 use crate::rpc::worker_client::WorkerClient;
 use crate::torch;
 use crate::util;
@@ -162,12 +163,21 @@ impl Manager {
         input: torch::InferenceTask,
     ) -> Result<torch::Inference> {
         let mut worker_client = WorkerClient::new(channel);
+        let ty = input.inference_type.clone();
         let req = Request::new(input.into());
-        let output: torch::Inference = worker_client
-            .compute_inference(req)
-            .await?
-            .into_inner()
-            .into();
+        let output: rpc::Inference = worker_client.compute_inference(req).await?.into_inner();
+
+        // Parse output
+        let output = match ty {
+            torch::InferenceType::ImageClassification { .. } => {
+                let classes: Vec<torch::Class> = output.classification.unwrap().into();
+                torch::Inference::Classification(classes)
+            }
+            torch::InferenceType::ImageToImage => {
+                torch::Inference::B64Image(output.image.unwrap().into())
+            }
+            _ => unimplemented!(),
+        };
 
         Ok(output)
     }
