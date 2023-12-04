@@ -8,8 +8,9 @@ use base64::{
     Engine as _,
 };
 
-use image::{Cursor, DynamicImage, ImageBuffer, ImageOutputFormat, PngEncoder, Rgb};
+use image::{codecs::png::PngEncoder, DynamicImage, ImageBuffer, ImageOutputFormat, Rgb};
 use serde::Serialize;
+use std::io::Cursor;
 use tch::vision::imagenet;
 use tch::{no_grad, vision, Device, IValue, Kind, Tensor};
 
@@ -25,7 +26,6 @@ pub struct Image {
 #[derive(Debug, Serialize)]
 pub struct Class {
     probability: Option<f64>,
-    class: Option<i32>,
     label: Option<String>,
 }
 
@@ -90,7 +90,6 @@ impl TorchModel {
             .iter()
             .map(|(p, l)| Class {
                 probability: Some(*p),
-                class: None,
                 label: Some(l.into()),
             })
             .collect();
@@ -108,7 +107,7 @@ impl TorchModel {
         let img = img.unsqueeze(0); // add batch dimension
 
         // Run the model on the image
-        let output = no_grad(|| self.model.forward_is(&[img.into()]))?;
+        let output: IValue = no_grad(|| self.model.forward_is(&[img])).unwrap();
 
         // The output is a Tensor with shape [1, num_classes, height, width]
         // You can convert it to a 2D image where each pixel's value is the class index
@@ -194,37 +193,52 @@ impl From<InputData> for rpc::ImageInput {
 
 impl From<rpc::ClassOutput> for Inference {
     fn from(data: rpc::ClassOutput) -> Self {
-        Inference::Classification(
-            data.classes
-                .into_iter()
-                .map(|c| Class {
-                    probability: Some(c.probability),
-                    class: Some(c.class_int),
-                    label: Some(c.label).filter(|x| x != ""),
-                })
-                .collect(),
-        )
+        data.classes
+            .into_iter()
+            .map(|c| Class {
+                probability: Some(c.probability),
+                label: Some(c.label).filter(|x| x != ""),
+            })
+            .collect()
     }
 }
 
-impl From<Inference> for rpc::ClassOutput {
-    fn from(data: Inference) -> Self {
-        match data {
-            Inference::Classification(c) => {
-                let classes: Vec<rpc::Classification> = c
+impl From<Vec<Class>> for rpc::Inference {
+    fn from(classes: Vec<Class>) -> Self {
+        rpc::Inference {
+            text: None,
+            image: None,
+            classification: Some(rpc::Classes {
+                classes: classes
                     .into_iter()
-                    .map(|c| rpc::Classification {
-                        probability: c.probability.unwrap_or(-1.0),
-                        label: c.label.unwrap_or(String::new()),
-                        class_int: c.class.unwrap_or(-1),
+                    .map(|c| rpc::Class {
+                        probability: c.probability,
+                        label: c.label,
                     })
-                    .collect();
-                rpc::ClassOutput {
-                    num_classes: classes.len() as u32,
-                    classes,
-                }
+                    .collect(),
+            }),
+        }
+    }
+}
+
+impl From<Inference> for rpc::Inference {
+    fn from(inference: Inference) -> rpc::Inference {
+        match inference {
+            Inference::Text(text) => rpc::Inference {
+                text: Some(text),
+                image: None,
+                classification: None,
+            },
+            Inference::Classification(c) => c.into(),
+            Inference::Image(_image) => {
+                // my X-to-image code should always ret a b64 image
+                unimplemented!()
             }
-            _ => todo!(),
+            Inference::B64Image(byte_str) => rpc::Inference {
+                image: Some(rpc::B64Image { image: byte_str }),
+                text: None,
+                classification: None,
+            },
         }
     }
 }
