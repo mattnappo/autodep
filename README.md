@@ -2,16 +2,16 @@
 Distributed and automatic ML model deployment at scale
 
 ## Tasks
-- [ ] Make and train a few small models in pytorch ([see this](https://pytorch.org/vision/stable/models.html))
-    - [ ] Image classification
+- [x] Make and train a few small models in pytorch ([see this](https://pytorch.org/vision/stable/models.html))
+    - [x] Image classification
         - [x] resnet18
-        - [ ] resnet50
-    - [ ] semantic segmentation
-        - [ ] deeplab v3
-    - [ ] object detection
-        - [ ] faster R-CNN
-    - [ ] transformer
-        - [ ] huggingface roberta exported to torchscript ([see this](https://huggingface.co/docs/transformers/torchscript))
+        - [x] resnet50
+    - [x] semantic segmentation
+        - [x] deeplab v3
+    - [x] object detection -- NOT SUPPORTED
+        - [x] faster R-CNN
+    - [x] transformer -- NOT SUPPORTED
+        - [x] huggingface roberta exported to torchscript ([see this](https://huggingface.co/docs/transformers/torchscript))
 - [x] Pytorch loading
     - [x] Lib Func to load torchscript
     - [x] Lib Func to run
@@ -40,7 +40,7 @@ Distributed and automatic ML model deployment at scale
 - [ ] Autoscaling algorithm (optional)
     - [ ] Look at past fixed window of HTTP traffic and determine how many workers to spin up/shut down
 - [x] HTTP server
-    - [ ] Parse config file to determine input type
+    - [x] determine input/inference type
     - [x] Make a single route for inference to the model
     - [x] Start the HTTP server
     - [x] HTTP server has a ResourceAllocator and will call RA methods to spin up/shut down
@@ -60,22 +60,22 @@ Distributed and automatic ML model deployment at scale
 
 ## Future Improvements
 - [ ] All `todo!()` and `TODO` code
-- [ ] Support more input datatypes
-- [ ] Make `TorchModel` more robust (make input type declared when `new` is called)
+- [x] Support more input datatypes
+- [x] Make `TorchModel` more robust (make input type declared when `new` is called)
 - [ ] Explicit CPU/GPU support
-- [ ] Don't hardcode for resnet
-- [ ] Make `Class` require one or the other option
-- [ ] Make `TOP_N` an HTTP API parameter
+- [x] Don't hardcode for resnet
+- [x] Make `Class` require one or the other option
+- [x] Make `TOP_N` an HTTP API parameter
 - [ ] Add stats to `Worker`
 - [ ] AWS (S3) input/output support
 - [ ] Allow for `Worker`s on different hosts
 - [x] Make a better mechanism than `thread.sleep` for waiting for a worker to start
 - [x] Run new `./worker` processes procs without cargo
 - [x] Fix the jank in `all_status`
-- [ ] Make `class_int` optional in the protobuf
+- [x] Make `class_int` optional in the protobuf
 - [x] Maybe remove second layer of indirection `Server` around `Manager`
 - [x] Make image deserialization on web side more robust
 
 ## Important improvements
 - [x] in `start_new_worker` -- a better mechanism than `thread.sleep`
-- [ ] in `run_inference` -- a better mechanism for starting a new worker
+- [x] in `run_inference` -- a better mechanism for starting a new worker

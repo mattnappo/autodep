@@ -4,11 +4,11 @@
 
 use super::WebError;
 
-use crate::manager::Manager;
+use crate::manager::{self, Manager};
 
-use crate::torch;
 use crate::torch::{Image, InputData};
 use crate::worker::WorkerStatus;
+use crate::{config, torch};
 
 use actix_web::{get, post, web, HttpRequest, Responder};
 use anyhow::anyhow;
@@ -39,11 +39,30 @@ pub async fn inference(
             Some(worker) => {
                 manager.set_worker_status(worker.pid, WorkerStatus::Working);
                 debug!("set idle worker to busy");
-                Ok(worker)
+                Ok::<manager::Handle, anyhow::Error>(worker)
             }
             None => {
-                warn!("all workers are busy: retry again later");
-                Err(anyhow!("all workers are busy: retry again later"))
+                warn!("all workers are busy: starting a new worker");
+                if config::AUTO_SCALE {
+                    // Start a new worker
+                    manager.start_new_workers(1).await?;
+                    let worker = {
+                        let worker = manager.get_idle_worker();
+                        if let Some(worker) = worker {
+                            manager.set_worker_status(worker.pid, WorkerStatus::Working);
+                            debug!("set idle worker to busy");
+                            Ok(worker)
+                        } else {
+                            Err(anyhow!(
+                                "all workers are busy, even after starting a new worker"
+                            ))
+                        }
+                    }?;
+
+                    Ok(worker)
+                } else {
+                    Err(anyhow!("all workers are busy: retry again later"))
+                }
             }
         }
     }?;
@@ -79,9 +98,20 @@ pub async fn worker_status(
     Ok(web::Json(status))
 }
 
+/// HTTP request to get all Working workers
+#[get("/workers/all")]
+pub async fn all_workers(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
+    let workers = {
+        let manager = state.read().unwrap();
+        manager.all_workers().unwrap()
+    };
+
+    web::Json(workers)
+}
+
 /// HTTP request to get server statistics
-#[get("/workers")]
-pub async fn workers(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
+#[get("/workers/info")]
+pub async fn worker_info(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
     let manager = state.read().unwrap();
 
     let workers = manager.workers();

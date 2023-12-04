@@ -25,13 +25,16 @@ pub mod config {
     pub const MAX_WORKERS: usize = 20;
 
     /// Number of workers to start the server with
-    pub const NUM_INIT_WORKERS: u16 = 5;
+    pub const NUM_INIT_WORKERS: u16 = 15;
 
     /// Max time given to connect to a worker's RPC server, in millis
-    pub const WORKER_TIMEOUT: u128 = 700;
+    pub const WORKER_TIMEOUT: u128 = 2000;
 
     /// Spot workers are one-time-use workers
     pub const SPOT_WORKERS: bool = false;
+
+    /// Dynamically allocate new worker processes when necessary
+    pub const AUTO_SCALE: bool = false;
 }
 
 /// Network utility functions

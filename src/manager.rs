@@ -127,14 +127,13 @@ impl Manager {
                         if now.elapsed().as_millis() >= WORKER_TIMEOUT {
                             return Err(anyhow!("timeout connecting to new worker process"));
                         }
-                        //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
                 }
             }
         })
         .await
-        .unwrap()
-        .unwrap();
+        .unwrap()?;
 
         let handle = Handle {
             port,
@@ -200,6 +199,15 @@ impl Manager {
             .workers
             .values()
             .map(|(handle, status)| (handle.clone(), status.clone()))
+            .collect())
+    }
+
+    pub fn all_workers(&self) -> Result<HashMap<Handle, WorkerStatus>> {
+        Ok(self
+            .all_status()
+            .unwrap()
+            .into_iter()
+            .filter(|(_, s)| *s == WorkerStatus::Working)
             .collect())
     }
 

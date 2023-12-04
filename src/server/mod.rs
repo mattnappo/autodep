@@ -23,8 +23,9 @@ impl Server {
                 .app_data(manager.clone())
                 .wrap(middleware::Logger::default())
                 .service(routes::inference)
-                .service(routes::workers)
                 .service(routes::worker_status)
+                .service(routes::all_workers)
+                .service(routes::worker_info)
         })
         .bind(format!("0.0.0.0:{port}"))?
         .run()
