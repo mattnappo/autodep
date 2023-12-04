@@ -26,15 +26,19 @@ pub async fn inference(
 ) -> Result<impl Responder> {
     // Parse the input request
     let input = req.into_inner();
+    info!("got inference request: {:?}", input);
 
     // Get a handle to an idle worker
     let worker = {
         let mut manager = state.write().unwrap();
         let worker = manager.get_idle_worker();
 
+        debug!("found idle worker");
+
         match worker {
             Some(worker) => {
                 manager.set_worker_status(worker.pid, WorkerStatus::Working);
+                debug!("set idle worker to busy");
                 Ok(worker)
             }
             None => {
@@ -46,7 +50,9 @@ pub async fn inference(
 
     // Send the inference request to the worker via RPC
     let channel = worker.channel.clone();
+    debug!("sending inference request");
     let output = Manager::run_inference(channel, input).await?;
+    debug!("received inference response");
 
     // Mark the worker as Idle again
     {

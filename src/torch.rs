@@ -11,7 +11,7 @@ use base64::{
 use base64;
 use image::{codecs::png::PngEncoder, DynamicImage, ImageBuffer, ImageOutputFormat, Rgb};
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use std::{fmt::Debug, io::Cursor};
 use tch::vision::imagenet;
 use tch::{no_grad, vision, Device, IValue, Kind, Tensor};
 
@@ -24,11 +24,21 @@ pub struct Image {
 }
 
 /// A base 64 image
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct B64Image {
     pub image: String,
     pub height: Option<u32>,
     pub width: Option<u32>,
+}
+
+impl Debug for B64Image {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "B64Image {{ img: <data>, height: {:?}, width: {:?} }}",
+            self.height, self.width
+        )
+    }
 }
 
 impl From<B64Image> for Image {
@@ -85,8 +95,8 @@ pub enum Inference {
     B64Image(B64Image),
 }
 
-#[derive(Deserialize, Debug, Clone)]
 /// The type of inference to compute
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum InferenceType {
     /// `InputData::Image` to `Inference::Classification`
     ImageClassification { top_n: u16 },
@@ -100,7 +110,7 @@ pub enum InferenceType {
 }
 
 /// Input data that inference can be computed on
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub enum InputData {
     Text(String),
     //Image(Image),
@@ -108,7 +118,7 @@ pub enum InputData {
 }
 
 /// The input to this module's ML engine -- a request for inference
-#[derive(Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InferenceTask {
     pub data: InputData,
     pub inference_type: InferenceType,
@@ -156,6 +166,7 @@ impl TorchModel {
         let img = img.unsqueeze(0); // add batch dimension
 
         // Run the model on the image
+        let img = IValue::Tensor(img);
         let output: IValue = no_grad(|| self.model.forward_is(&[img])).unwrap();
 
         // The output is a Tensor with shape [1, num_classes, height, width]
@@ -165,43 +176,17 @@ impl TorchModel {
             _ => return Err(anyhow!("invalid type")),
         };
         //let output: Tensor = output.get(0);
-        let output = output.squeeze();
+        let output = output.squeeze(); // remove the batch dimension
         let output = output.argmax(0, false); // get the class index for each pixel
         let output = output.to_kind(Kind::Uint8); // convert to uint8
 
-        // Convert the Tensor back to an ImageBuffer
+        // code is good up to here
         let (width, height) = (output.size()[1], output.size()[0]);
-        //let output_data: Vec<u8> = output.into();
-        let output_data = output.view([-1]).to_kind(tch::Kind::Uint8).into();
 
-        let output_image: ImageBuffer<Rgb<u8>, _> =
-            ImageBuffer::from_raw(width as u32, height as u32, output_data).unwrap();
+        let t = std::time::Instant::now();
+        tch::vision::image::save(&output, format!("sd_{:?}.png", t)).unwrap();
 
-        // Create a Vec<u8> to write to
-        let mut buffer: Vec<u8> = Vec::new();
-
-        // Write the image to the buffer in PNG format
-        {
-            let encoder = PngEncoder::new(&mut buffer);
-            encoder
-                .encode(
-                    &output_image,
-                    output_image.width(),
-                    output_image.height(),
-                    image::ColorType::Rgb8,
-                )
-                .unwrap();
-        }
-
-        let img = Image {
-            image: buffer,
-            height: Some(height as u32),
-            width: Some(width as u32),
-        };
-
-        // Encode the buffer as base-64
-
-        Ok(Inference::B64Image(img.into()))
+        todo!()
     }
 
     /// Run inference on the loaded model given an `InferenceTask`
@@ -275,11 +260,8 @@ impl From<rpc::B64Image> for Image {
 
 impl From<rpc::InferenceTask> for InferenceTask {
     fn from(task: rpc::InferenceTask) -> InferenceTask {
-        match task
-            .inference_type
-            .expect("must provide inference type")
-            .r#type
-        {
+        let ty = task.inference_type.clone();
+        match ty.expect("must provide inference type").r#type {
             // ImageClassification
             0 => InferenceTask {
                 data: InputData::B64Image(
@@ -308,6 +290,7 @@ impl From<rpc::InferenceTask> for InferenceTask {
                 ),
                 inference_type: InferenceType::TextToText,
             },
+            _ => unreachable!(),
         }
     }
 }
@@ -348,7 +331,9 @@ impl From<InferenceTask> for rpc::InferenceTask {
                     text: None,
                 }
             }
-            InferenceType::TextToText => unimplemented!(),
+            InferenceType::TextToText => {
+                unimplemented!("inference type TextToText not implemented yet")
+            }
         }
     }
 }
@@ -406,5 +391,41 @@ mod tests {
                 let outputs = loader.run(task).unwrap();
                 println!("outputs: {outputs:#?}");
             });
+    }
+
+    #[test]
+    fn test_deeplabv3() {
+        let loader = TorchModel::new("models/deeplabv3.pt".into()).unwrap();
+
+        let task = InferenceTask {
+            data: test::load_image_from_disk("images/seg1.png".into()),
+            inference_type: InferenceType::ImageToImage,
+        };
+        let outputs = loader.run(task).unwrap();
+        println!("outputs: {outputs:#?}");
+    }
+
+    #[test]
+    fn test_faster_rcnn() {
+        let loader = TorchModel::new("models/faster_rcnn.pt".into()).unwrap();
+
+        let task = InferenceTask {
+            data: test::load_image_from_disk("images/seg1.png".into()),
+            inference_type: InferenceType::ImageToImage,
+        };
+        let outputs = loader.run(task).unwrap();
+        println!("outputs: {outputs:#?}");
+    }
+
+    use serde_json;
+
+    #[test]
+    fn test_ser() {
+        let task = InferenceTask {
+            data: test::load_image_from_disk("images/seg1.png".into()),
+            inference_type: InferenceType::ImageClassification { top_n: 3 },
+        };
+
+        println!("{}", serde_json::to_string(&task).unwrap());
     }
 }
