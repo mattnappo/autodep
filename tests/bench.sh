@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ali --duration=5s \
-    --rate=35 \
+    --rate=25 \
     --workers=12 \
     --header 'Content-Type: application/json' \
-    --body-file=$1 \
+    --body-file=tests/classification_req.json \
     --method=POST http://localhost:9000/inference
 
