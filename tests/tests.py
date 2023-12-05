@@ -8,13 +8,22 @@ import time
 with open("./images/cat.png", "rb") as image_file:
     image = base64.b64encode(image_file.read()).decode('utf-8')
 
-payload = {
+CLASSIFICATION_PAYLOAD = {
     "data": {
         "B64Image": {
             "image": image,
         }
     },
     "inference_type": {"ImageClassification":{"top_n":3}}
+}
+
+IMG2IMG_PAYLOAD = {
+    "data": {
+        "B64Image": {
+            "image": image,
+        }
+    },
+    "inference_type": "ImageToImage"
 }
 
 def secs_nano_to_secs(seconds, nanoseconds):
@@ -33,10 +42,14 @@ def thread_function(args):
         inference_time = secs_nano_to_secs(inference[1]['secs'], inference[1]['nanos'])
 
         overhead_ms = (req_time - inference_time) * 1000
-        print(overhead_ms)
+        if PRINT_INFERENCE:
+            logging.info(inference)
+        else PRINT_INFERENCE:
+            logging.info(overhead_ms)
 
 NUM_THREADS = 5
-NUM_REQS_PER_THREAD = 5
+NUM_REQS_PER_THREAD = 30
+PRINT_INFERENCE = True
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
@@ -54,6 +67,5 @@ if __name__ == "__main__":
         x.join()
 
     logging.info("done")
-    print(times)
 
 

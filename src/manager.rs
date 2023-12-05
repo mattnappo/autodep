@@ -109,6 +109,7 @@ impl Manager {
         let (pid, ch) = tokio::task::spawn(async move {
             // Forward worker's logs to a file
             let t = util::time();
+            std::fs::create_dir_all("logs/")?;
             let out_name = format!("./logs/worker_{}_{}.out", port, t);
             let err_name = format!("./logs/worker_{}_{}.err", port, t);
             let out_log = File::create(out_name).expect("failed to open log");
