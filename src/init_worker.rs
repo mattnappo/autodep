@@ -32,7 +32,6 @@ async fn main() -> anyhow::Result<()> {
 
     init_libtorch(&config.get_string("worker.libtorch_path").unwrap());
     std::env::set_var("RUST_LOG", config.get_string("manager.logging").unwrap());
-    //env_logger::init();
     tracing_subscriber::fmt::init();
 
     let worker = Worker::new(&model_file, port).unwrap();

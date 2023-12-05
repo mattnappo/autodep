@@ -2,7 +2,7 @@
 port = 9000
 
 [manager]
-logging = "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
+logging = "h2=info,worker=debug,autodep=debug,actix_web=debug,actix_server=info"
 
 # Maximum number of workers
 max_workers = 20
@@ -24,7 +24,7 @@ fast_workers = true
 
 [worker]
 # Path to the local libtorch installation
-libtorch_path = "/home/matt/rust/autodep/target/release/build/torch-sys-abdb1e401c3e2cb9/out/libtorch/libtorch/lib/";
+libtorch_path = "/home/matt/rust/autodep/target/release/build/torch-sys-abdb1e401c3e2cb9/out/libtorch/libtorch/lib/"
 
 # The path to the compiled worker binary
-binary = "/home/matt/autodep/target/release/worker";
+binary = "/home/matt/rust/autodep/target/release/worker"

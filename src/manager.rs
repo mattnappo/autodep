@@ -90,7 +90,7 @@ impl Manager {
     }
 
     /// Start a new worker process on the local machine and connect to it
-    #[tracing::instrument]
+    //#[tracing::instrument]
     async fn start_new_worker(&mut self) -> Result<Handle> {
         if self.workers.len() + 1 >= self.config.get_int("manager.max_workers")? as usize {
             return Err(anyhow!(
@@ -115,7 +115,9 @@ impl Manager {
             let err_log = File::create(err_name).expect("failed to open log");
 
             // Spawn the new worker process
-            let command = format!("{} {}", port, model_file);
+            let config_file = std::env::args().collect::<Vec<String>>();
+            let config_file = config_file.get(1).unwrap();
+            let command = format!("{} {} {}", port, config_file, model_file);
             let args = command.split(' ').map(|n| n.to_string());
             let pid = Command::new(cfg.get_string("worker.binary")?)
                 .env("RUST_LOG", cfg.get_string("manager.logging")?)
@@ -212,7 +214,7 @@ impl Manager {
     }
 
     /// Get the statuses of all workers
-    #[tracing::instrument]
+    // #[tracing::instrument]
     pub fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         Ok(self
             .workers
@@ -221,6 +223,7 @@ impl Manager {
             .collect())
     }
 
+    // #[tracing::instrument]
     pub fn all_workers(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         Ok(self
             .all_status()
@@ -231,7 +234,7 @@ impl Manager {
     }
 
     /// Return all the workers, without their status
-    #[tracing::instrument]
+    // #[tracing::instrument]
     pub fn workers(&self) -> Vec<PartialHandle> {
         self.workers
             .values()
@@ -243,6 +246,7 @@ impl Manager {
     }
 
     /// Get statistics of all workers
+    // #[tracing::instrument]
     pub async fn all_stats(&self) -> Result<HashMap<PartialHandle, u64>> {
         let mut map: HashMap<PartialHandle, u64> = HashMap::new();
 
@@ -262,7 +266,7 @@ impl Manager {
     }
 
     /// Start a new worker process on the local machine and connect to it
-    #[tracing::instrument]
+    //#[tracing::instrument]
     pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
         let mut stream = tokio_stream::iter(0..n);
         while let Some(_) = stream.next().await {

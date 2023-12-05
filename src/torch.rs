@@ -214,8 +214,6 @@ impl TorchModel {
             output_data.extend_from_slice(&dst);
         }
 
-        tch::vision::image::save(&output_predictions, format!("sd.png")).unwrap();
-
         // Convert tensor to rgb image
         let output_image: ImageBuffer<Rgb<u8>, _> =
             ImageBuffer::from_raw(width as u32, height as u32, output_data).unwrap();

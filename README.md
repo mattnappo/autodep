@@ -12,14 +12,16 @@ Autodep is an easy to use tool that automates the deployment of PyTorch models. 
 
 ## Usage
 
+### Configuring
+
+The default configuration is accessible in `config.toml`. Note that Autodep requires a local installation of `libtorch`, so please install `libtorch` before running autodep. 
+
 ### Compiling
+
+After `libtorch` has been installed and the path is set in the config file, compile Autodep with
 ```
 cargo build --release
 ```
-
-### Configuring
-
-
 
 ### Running
 
@@ -28,10 +30,77 @@ To use Autodep, provide a TorchScript file, and the tool will start an HTTP serv
 Usage:
 
 ```
-./autodep <port> <model file>
+cargo run --release --bin autodep <config file> <model file>
+```
+or
+```
+./autodep <config file> <model file>
 ```
 
-This command starts an HTTP server on port `<port>` that serves the TorchScript model located at `<model file>`.
+This command starts an HTTP server on the port specified in the config file. This server serves the TorchScript model located at `<model file>` via the `/inference` route.
+
+Note: make sure that there is a `logs/` folder in the current directory.
+
+## Routes
+
+### POST `/inference`
+Run model inference
+
+For TextToText or ImageToImage inference, requests are of type:
+```json
+{
+    "data": {
+        "B64Image": {
+            "image": "<base-64 encoded image>",
+            "height": 224,
+            "width": 224
+        }
+    },
+    "inference_type": "ImageToImage"
+}
+```
+or
+```json
+{
+    "data": {
+        "text": "<input text>"
+    },
+    "inference_type": "TextToText"
+}
+```
+
+For ImageClassification tasks, requests are of type:
+```json
+{
+    "data": {
+        "B64Image": {
+            "image": "<base-64 encoded image>",
+            "height": 500,
+            "width": 700
+        }
+    },
+    "inference_type": {
+        "ImageClassification": {
+            "top_n": 5
+        }
+    }
+}
+```
+
+where `top_n` is a parameter for the number of top classes to return.
+
+Example requests can be found in `/tests/`.
+
+### GET `/workers`
+View the currently-active workers
+
+## Auxiliary Routes
+
+### GET `/workers/_info`
+View statistics such as number of requests served for each worker
+
+### GET `/workers/_status`
+View the status of the workers
 
 ## Documentation
 

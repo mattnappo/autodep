@@ -52,7 +52,7 @@ impl Worker {
     }
 
     /// Start listening for requests
-    #[tracing::instrument]
+    // #[tracing::instrument]
     pub async fn start(self) -> anyhow::Result<()> {
         info!(
             "starting new worker on port {} with model {:?}",
