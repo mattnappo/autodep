@@ -75,6 +75,7 @@ Distributed and automatic ML model deployment at scale
 - [x] Make `class_int` optional in the protobuf
 - [x] Maybe remove second layer of indirection `Server` around `Manager`
 - [x] Make image deserialization on web side more robust
+- [ ] Randomize which worker is chosen in `get_idle_worker`
 
 ## Important improvements
 - [x] in `start_new_worker` -- a better mechanism than `thread.sleep`

@@ -10,6 +10,7 @@ use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
+use rand::seq::SliceRandom;
 
 use serde::ser::Serialize;
 use serde::Serialize as DeriveSerialize;
@@ -34,8 +35,17 @@ pub struct Handle {
     pub channel: Channel,
 }
 
+impl Handle {
+    pub fn partial(&self) -> PartialHandle {
+        PartialHandle {
+            pid: self.pid,
+            port: self.port,
+        }
+    }
+}
+
 /// A (pid, port) tuple
-#[derive(Clone, Debug, DeriveSerialize)]
+#[derive(Clone, Debug, DeriveSerialize, Eq, PartialEq, Hash)]
 pub struct PartialHandle {
     pub port: u16,
     pub pid: u32,
@@ -189,6 +199,7 @@ impl Manager {
             .map(|(handle, _)| handle.clone())
             .collect::<Vec<Handle>>()
             .first()
+            //.choose(&mut rand::thread_rng())
             .cloned()
     }
 
@@ -221,6 +232,25 @@ impl Manager {
                 port: w.port,
             })
             .collect()
+    }
+
+    /// Get statistics of all workers
+    pub async fn all_stats(&self) -> Result<HashMap<PartialHandle, u64>> {
+        let mut map: HashMap<PartialHandle, u64> = HashMap::new();
+
+        let mut handles = tokio_stream::iter(self.workers.values());
+        while let Some((handle, _)) = handles.next().await {
+            debug!("getting status of worker pid {}", handle.pid);
+            let channel = handle.channel.clone();
+
+            let req = Request::new(rpc::Empty {});
+            let mut worker_client = WorkerClient::new(channel);
+            let res = worker_client.get_stats(req).await?.into_inner();
+
+            map.insert(handle.partial(), res.reqs_served);
+        }
+
+        Ok(map)
     }
 
     /// Start a new worker process on the local machine and connect to it

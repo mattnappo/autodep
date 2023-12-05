@@ -30,19 +30,19 @@ pub async fn inference(
 
     // Get a handle to an idle worker
     let worker = {
-        let mut manager = state.write().unwrap();
-        let worker = manager.get_idle_worker();
+        let worker = {
+            let m = state.read().unwrap();
+            m.get_idle_worker()
+        };
 
         debug!("found idle worker");
 
         match worker {
-            Some(worker) => {
-                manager.set_worker_status(worker.pid, WorkerStatus::Working);
-                debug!("set idle worker to busy");
-                Ok::<manager::Handle, anyhow::Error>(worker)
-            }
+            Some(worker) => Ok::<manager::Handle, anyhow::Error>(worker),
             None => {
                 warn!("all workers are busy");
+                Err(anyhow!("all workers are busy"))
+                /*
                 if config::AUTO_SCALE {
                     // Start a new worker
                     info!("dynamically starting a new worker");
@@ -59,11 +59,11 @@ pub async fn inference(
                             ))
                         }
                     }?;
-
                     Ok(worker)
                 } else {
                     Err(anyhow!("all workers are busy: retry again later"))
                 }
+                */
             }
         }
     }?;
@@ -71,6 +71,14 @@ pub async fn inference(
     // Send the inference request to the worker via RPC
     let channel = worker.channel.clone();
     debug!("sending inference request");
+
+    // Mark the work as busy
+    if !config::FAST_WORKERS {
+        let mut manager = state.write().unwrap();
+        manager.set_worker_status(worker.pid, WorkerStatus::Working);
+        debug!("set idle worker to busy");
+    }
+
     let output = Manager::run_inference(channel, input).await?;
     debug!("received inference response");
 
@@ -112,9 +120,12 @@ pub async fn all_workers(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -
 
 /// HTTP request to get server statistics
 #[get("/workers/_info")]
-pub async fn worker_info(_req: HttpRequest, state: web::Data<RwLock<Manager>>) -> impl Responder {
+pub async fn worker_info(
+    _req: HttpRequest,
+    state: web::Data<RwLock<Manager>>,
+) -> Result<impl Responder> {
     let manager = state.read().unwrap();
-
-    let workers = manager.workers();
-    web::Json(workers)
+    let stats = manager.all_stats().await?;
+    let stats_list = stats.into_iter().collect::<Vec<_>>();
+    Ok(web::Json(stats_list))
 }

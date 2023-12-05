@@ -50,8 +50,13 @@ message Inference {
     float duration = 4; // Inference time in seconds
 }
 
+message Stats {
+    uint64 reqs_served = 1;
+}
+
 // An inference worker
 service Worker {
     rpc ComputeInference(InferenceTask) returns (Inference) {}
+    rpc GetStats(Empty) returns (Stats) {}
 }
 

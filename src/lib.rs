@@ -12,14 +12,16 @@ pub mod rpc {
 /// file
 pub mod config {
     /// Path to the local libtorch installation
-    pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-3f99fa23d8dcb15b/out/libtorch/libtorch/lib";
+    //pub const LIBTORCH_PATH: &str = "/home/matt/rust/autodep/target/debug/build/torch-sys-3f99fa23d8dcb15b/out/libtorch/libtorch/lib";
+    pub const LIBTORCH_PATH: &str = "torch-sys-abdb1e401c3e2cb9/out/libtorch/libtorch/lib/";
 
     /// Logging settings
     pub const RUST_LOG: &str =
         "h2=debug,worker=debug,autodep=debug,actix_web=debug,actix_server=debug";
 
     /// The path to the compiled worker binary
-    pub const WORKER_BINARY: &str = "./target/debug/worker";
+    //pub const WORKER_BINARY: &str = "./target/debug/worker";
+    pub const WORKER_BINARY: &str = "./target/release/worker";
 
     /// Maximum number of workers
     pub const MAX_WORKERS: usize = 20;
@@ -35,6 +37,10 @@ pub mod config {
 
     /// Dynamically allocate new worker processes when necessary
     pub const AUTO_SCALE: bool = false;
+
+    /// When FAST_WORKERS is true, workers do not get set as `Working`.
+    /// Instead, they always appear as `Idle`.
+    pub const FAST_WORKERS: bool = true;
 }
 
 /// Network utility functions

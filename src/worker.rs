@@ -6,6 +6,8 @@ use crate::rpc::worker_server::{self, WorkerServer};
 use crate::torch;
 
 use serde::Serialize;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tonic::transport::Server;
@@ -37,6 +39,7 @@ pub enum WorkerStatus {
 pub struct Worker {
     model: Arc<torch::TorchModel>,
     port: u16,
+    reqs_served: AtomicU64,
 }
 
 impl Worker {
@@ -44,6 +47,7 @@ impl Worker {
         Ok(Worker {
             model: Arc::new(torch::TorchModel::new(model_file)?),
             port,
+            reqs_served: AtomicU64::new(0),
         })
     }
 
@@ -91,6 +95,12 @@ impl worker_server::Worker for Worker {
         let res = model.run(task).unwrap();
 
         info!("worker successfully computed inference: {res:?}");
+        self.reqs_served.fetch_add(1, Ordering::SeqCst);
         Ok(Response::new(res.into()))
+    }
+
+    async fn get_stats(&self, _req: Request<rpc::Empty>) -> Result<Response<rpc::Stats>> {
+        let reqs_served = self.reqs_served.load(Ordering::SeqCst);
+        Ok(Response::new(rpc::Stats { reqs_served }))
     }
 }

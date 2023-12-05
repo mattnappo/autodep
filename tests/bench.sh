@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ali --duration=10s \
-    --rate=8 \
-    --workers=5 \
+    --rate=50 \
+    --workers=8 \
     --header 'Content-Type: application/json' \
-    --body-file=./img2img_req.json \
+    --body-file=$1 \
     --method=POST http://localhost:9000/inference
 
