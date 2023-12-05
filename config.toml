@@ -21,7 +21,7 @@ auto_scale = false
 
 # When FAST_WORKERS is true, workers do not get set as `Working`. Instead, they always appear as `Idle`.
 #fast_workers = false
-fast_workers = true
+fast_workers = false
 
 [worker]
 # Path to the local libtorch installation

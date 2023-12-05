@@ -6,6 +6,10 @@ use super::WebError;
 
 use crate::manager::{self, Manager};
 
+use crate::rpc;
+use crate::rpc::worker_client::WorkerClient;
+use tonic::Request;
+
 use crate::torch::{Image, InputData};
 use crate::worker::WorkerStatus;
 use crate::{config, torch};
@@ -77,14 +81,23 @@ pub async fn inference(
         let s = state.read().unwrap();
         s.config.get_bool("manager.fast_workers")?
     };
+
+    //let output = Manager::run_inference(channel, input).await?;
+
+    let mut worker_client = WorkerClient::new(channel);
+    let ty = input.inference_type.clone();
+    let req = Request::new(input.into());
+
     if !fast_workers {
         let mut manager = state.write().unwrap();
         manager.set_worker_status(worker.pid, WorkerStatus::Working);
         debug!("set idle worker to busy");
     }
-
-    let output = Manager::run_inference(channel, input).await?;
-    debug!("received inference response");
+    let rpc_output: rpc::Inference = worker_client
+        .compute_inference(req)
+        .await
+        .unwrap()
+        .into_inner();
 
     // Mark the worker as Idle again
     {
@@ -92,9 +105,29 @@ pub async fn inference(
         manager.set_worker_status(worker.pid, WorkerStatus::Idle);
     }
 
+    // Parse output
+    let output = match ty {
+        torch::InferenceType::ImageClassification { .. } => {
+            let classes: Vec<torch::Class> = rpc_output.classification.unwrap().into();
+            torch::Inference::Classification(classes)
+        }
+        torch::InferenceType::ImageToImage => {
+            torch::Inference::B64Image(rpc_output.image.unwrap().into())
+        }
+        _ => unimplemented!(),
+    };
+
+    let res = (
+        output,
+        std::time::Duration::from_secs_f32(rpc_output.duration),
+    );
+
+    debug!("received inference response");
+
     info!("finished serving inference request");
 
-    Ok(web::Json(output))
+    //Ok(web::Json(output))
+    Ok(web::Json(res))
 }
 
 /// HTTP request to get the status of all workers

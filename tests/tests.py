@@ -32,7 +32,10 @@ def secs_nano_to_secs(seconds, nanoseconds):
 def thread_function(args):
     logging.info(f"------STARTED NEW THREAD------\nargs:{args}\n")
     headers = {'Content-type': 'application/json'}
-    data = json.dumps(payload)
+    if CLASSIFICATION:
+        data = json.dumps(CLASSIFICATION_PAYLOAD)
+    else:
+        data = json.dumps(IMG2IMG_PAYLOAD)
 
     for i in range(NUM_REQS_PER_THREAD):
         res = requests.post("http://localhost:9000/inference", data=data, headers=headers)
@@ -44,12 +47,13 @@ def thread_function(args):
         overhead_ms = (req_time - inference_time) * 1000
         if PRINT_INFERENCE:
             logging.info(inference)
-        else PRINT_INFERENCE:
+        else:
             logging.info(overhead_ms)
 
 NUM_THREADS = 5
 NUM_REQS_PER_THREAD = 30
 PRINT_INFERENCE = True
+CLASSIFICATION = True
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
