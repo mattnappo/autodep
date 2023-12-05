@@ -4,6 +4,7 @@ use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::{middleware, web, App, HttpServer};
 use anyhow::anyhow;
+use config::Config;
 use std::collections::HashMap;
 use std::io;
 use std::sync::RwLock;
@@ -13,20 +14,27 @@ pub mod routes;
 pub struct Server;
 
 impl Server {
-    pub async fn new(model: String, port: u16) -> io::Result<()> {
-        let manager = web::Data::new(RwLock::new(Manager::new(model.clone()).await.unwrap()));
+    pub async fn new(model: &str, config: Config) -> io::Result<()> {
+        let manager = web::Data::new(RwLock::new(
+            Manager::new(model, config.clone()).await.unwrap(),
+        ));
 
         // Start the HTTP server
+        let cfg = config.clone();
         HttpServer::new(move || {
             App::new()
                 .app_data(manager.clone())
+                .app_data(web::Data::new(cfg.clone()))
                 .wrap(middleware::Logger::default())
                 .service(routes::inference)
                 .service(routes::worker_status)
                 .service(routes::all_workers)
                 .service(routes::worker_info)
         })
-        .bind(format!("0.0.0.0:{port}"))?
+        .bind(format!(
+            "0.0.0.0:{}",
+            config.clone().get_int("http_server.port").unwrap()
+        ))?
         .run()
         .await
     }
@@ -60,6 +68,12 @@ impl actix_web::error::ResponseError for WebError {
 impl From<anyhow::Error> for WebError {
     fn from(err: anyhow::Error) -> WebError {
         WebError { err }
+    }
+}
+
+impl From<config::ConfigError> for WebError {
+    fn from(err: config::ConfigError) -> WebError {
+        WebError { err: anyhow!(err) }
     }
 }
 

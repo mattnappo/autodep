@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 
-with open("./images/seg1.jpg", "rb") as image_file:
+with open("./images/cat.png", "rb") as image_file:
     image = base64.b64encode(image_file.read()).decode('utf-8')
 
 payload = {
@@ -34,12 +34,12 @@ def thread_function(args):
         inference_time = secs_nano_to_secs(inference[1]['secs'], inference[1]['nanos'])
 
         overhead_ms = (req_time - inference_time) * 1000
-        print(overhead_ms)
+        logging.info(overhead_ms)
         times.append(overhead_ms)
     return times
 
-NUM_THREADS = 10
-NUM_REQS_PER_THREAD = 10
+NUM_THREADS = 3
+NUM_REQS_PER_THREAD = 5
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"

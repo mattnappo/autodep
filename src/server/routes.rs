@@ -73,7 +73,11 @@ pub async fn inference(
     debug!("sending inference request");
 
     // Mark the work as busy
-    if !config::FAST_WORKERS {
+    let fast_workers = {
+        let s = state.read().unwrap();
+        s.config.get_bool("manager.fast_workers")?
+    };
+    if !fast_workers {
         let mut manager = state.write().unwrap();
         manager.set_worker_status(worker.pid, WorkerStatus::Working);
         debug!("set idle worker to busy");

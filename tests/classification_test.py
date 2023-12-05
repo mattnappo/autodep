@@ -35,8 +35,8 @@ def thread_function(args):
         overhead_ms = (req_time - inference_time) * 1000
         print(overhead_ms)
 
-NUM_THREADS = 6
-NUM_REQS_PER_THREAD = 10
+NUM_THREADS = 5
+NUM_REQS_PER_THREAD = 5
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"

@@ -138,7 +138,7 @@ pub struct TorchModel {
 }
 
 impl TorchModel {
-    pub fn new(filename: String) -> Result<Self> {
+    pub fn new(filename: &str) -> Result<Self> {
         Ok(TorchModel {
             model: tch::CModule::load(filename)?,
         })
@@ -213,6 +213,8 @@ impl TorchModel {
             color.copy_data(&mut dst, 3);
             output_data.extend_from_slice(&dst);
         }
+
+        tch::vision::image::save(&output_predictions, format!("sd.png")).unwrap();
 
         // Convert tensor to rgb image
         let output_image: ImageBuffer<Rgb<u8>, _> =
