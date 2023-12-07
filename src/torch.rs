@@ -138,7 +138,7 @@ pub struct TorchModel {
 }
 
 impl TorchModel {
-    pub fn new(filename: String) -> Result<Self> {
+    pub fn new(filename: &str) -> Result<Self> {
         Ok(TorchModel {
             model: tch::CModule::load(filename)?,
         })

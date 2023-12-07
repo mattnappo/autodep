@@ -8,7 +8,7 @@ import time
 with open("./images/cat.png", "rb") as image_file:
     image = base64.b64encode(image_file.read()).decode('utf-8')
 
-payload = {
+CLASSIFICATION_PAYLOAD = {
     "data": {
         "B64Image": {
             "image": image,
@@ -17,13 +17,25 @@ payload = {
     "inference_type": {"ImageClassification":{"top_n":3}}
 }
 
+IMG2IMG_PAYLOAD = {
+    "data": {
+        "B64Image": {
+            "image": image,
+        }
+    },
+    "inference_type": "ImageToImage"
+}
+
 def secs_nano_to_secs(seconds, nanoseconds):
     return seconds + nanoseconds * 1e-9
 
 def thread_function(args):
     logging.info(f"------STARTED NEW THREAD------\nargs:{args}\n")
     headers = {'Content-type': 'application/json'}
-    data = json.dumps(payload)
+    if CLASSIFICATION:
+        data = json.dumps(CLASSIFICATION_PAYLOAD)
+    else:
+        data = json.dumps(IMG2IMG_PAYLOAD)
 
     for i in range(NUM_REQS_PER_THREAD):
         res = requests.post("http://localhost:9000/inference", data=data, headers=headers)
@@ -33,10 +45,15 @@ def thread_function(args):
         inference_time = secs_nano_to_secs(inference[1]['secs'], inference[1]['nanos'])
 
         overhead_ms = (req_time - inference_time) * 1000
-        print(overhead_ms)
+        if PRINT_INFERENCE:
+            logging.info(inference)
+        else:
+            logging.info(overhead_ms)
 
-NUM_THREADS = 6
-NUM_REQS_PER_THREAD = 10
+NUM_THREADS = 5
+NUM_REQS_PER_THREAD = 30
+PRINT_INFERENCE = True
+CLASSIFICATION = True
 
 if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
@@ -54,6 +71,5 @@ if __name__ == "__main__":
         x.join()
 
     logging.info("done")
-    print(times)
 
 

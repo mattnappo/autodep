@@ -1,0 +1,30 @@
+[http_server]
+port = 9000
+
+[manager]
+logging = "h2=info,worker=debug,autodep=debug,actix_web=debug,actix_server=info"
+
+# Maximum number of workers
+max_workers = 20
+
+# Number of workers to start the server with
+num_init_workers = 15
+
+# Max time given to connect to a worker's RPC server, in millis
+worker_timeout = 2000
+
+# Spot workers are one-time-use workers
+spot_workers = false
+
+# Dynamically allocate new worker processes when necessary
+auto_scale = false
+
+# When FAST_WORKERS is true, workers do not get set as `Working`. Instead, they always appear as `Idle`.
+fast_workers = true
+
+[worker]
+# Path to the local libtorch installation
+libtorch_path = "/home/matt/rust/autodep/target/release/build/torch-sys-abdb1e401c3e2cb9/out/libtorch/libtorch/lib/"
+
+# The path to the compiled worker binary
+binary = "/home/matt/rust/autodep/target/release/worker"

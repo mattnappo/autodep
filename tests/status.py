@@ -1,20 +1,16 @@
-import requests, json
+import requests, json, time
 from collections import Counter
 
-'''
+curr = -1
 while True:
     res = requests.get("http://localhost:9000/workers/_status")
     status = res.json()
     count = Counter(status.values())
     working = count['Working']
-    if working > 1:
-        print("super parallel")
-    #print(json.dumps(status.json(), indent=2))
-    print()
-'''
+    if working != curr:
+        curr = working
+        print(f"Active workers: {curr}")
 
-while True:
-    res = requests.get("http://localhost:9000/workers")
-    status = res.json()
-    print(status)
-    print()
+    time.sleep(0.05)
+
+

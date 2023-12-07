@@ -43,16 +43,16 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(model_file: String, port: u16) -> anyhow::Result<Self> {
+    pub fn new(model_file: &str, port: u16) -> anyhow::Result<Self> {
         Ok(Worker {
-            model: Arc::new(torch::TorchModel::new(model_file)?),
+            model: Arc::new(torch::TorchModel::new(model_file.into())?),
             port,
             reqs_served: AtomicU64::new(0),
         })
     }
 
     /// Start listening for requests
-    #[tracing::instrument]
+    // #[tracing::instrument]
     pub async fn start(self) -> anyhow::Result<()> {
         info!(
             "starting new worker on port {} with model {:?}",
@@ -68,14 +68,6 @@ impl Worker {
             .await?;
         Ok(())
     }
-
-    /*
-    /// Run inference on the worker
-    #[tracing::instrument]
-    pub fn run(&self, input: torch::InputData) -> anyhow::Result<torch::Inference> {
-        self.model.run(input)
-    }
-    */
 }
 
 #[tonic::async_trait]

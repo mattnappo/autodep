@@ -2,7 +2,6 @@
 //! interfacing with a set of workers. The manager starts and stops workers, and
 //! forwards inference requests
 
-use crate::config::{self, *};
 use crate::rpc;
 use crate::rpc::worker_client::WorkerClient;
 use crate::torch;
@@ -10,6 +9,7 @@ use crate::util;
 use crate::worker::WorkerStatus;
 use anyhow::anyhow;
 use anyhow::Result;
+use config::Config;
 use rand::seq::SliceRandom;
 
 use serde::ser::Serialize;
@@ -66,28 +66,33 @@ impl Serialize for Handle {
 #[derive(Debug)]
 pub struct Manager {
     /// Map from PID to `Handle`s of current workers
-    pub workers: HashMap<u32, (Handle, WorkerStatus)>,
+    workers: HashMap<u32, (Handle, WorkerStatus)>,
 
     /// The path to the TorchScript model file
     model_file: String,
+
+    /// System configuration
+    pub config: Config,
 }
 
 impl Manager {
     /// Start a new manager and start `NUM_INIT_WORKERS` new worker processes
-    pub async fn new(model_file: String) -> Result<Self> {
+    pub async fn new(model_file: &str, config: Config) -> Result<Self> {
         let mut m = Manager {
             workers: HashMap::new(),
-            model_file,
+            model_file: model_file.into(),
+            config: config.clone(),
         };
 
-        m.start_new_workers(NUM_INIT_WORKERS).await?;
+        m.start_new_workers(config.get_int("manager.num_init_workers")? as u16)
+            .await?;
         Ok(m)
     }
 
     /// Start a new worker process on the local machine and connect to it
-    #[tracing::instrument]
+    //#[tracing::instrument]
     async fn start_new_worker(&mut self) -> Result<Handle> {
-        if self.workers.len() + 1 >= config::MAX_WORKERS {
+        if self.workers.len() + 1 >= self.config.get_int("manager.max_workers")? as usize {
             return Err(anyhow!(
                 "maximum number of workers exceeded. cannot allocate any more",
             ));
@@ -100,19 +105,23 @@ impl Manager {
         let model_file = self.model_file.clone();
 
         // Start a new thread to spawn a new process
+        let cfg = self.config.clone();
         let (pid, ch) = tokio::task::spawn(async move {
             // Forward worker's logs to a file
             let t = util::time();
+            std::fs::create_dir_all("logs/")?;
             let out_name = format!("./logs/worker_{}_{}.out", port, t);
             let err_name = format!("./logs/worker_{}_{}.err", port, t);
             let out_log = File::create(out_name).expect("failed to open log");
             let err_log = File::create(err_name).expect("failed to open log");
 
             // Spawn the new worker process
-            let command = format!("{} {}", port, model_file);
+            let config_file = std::env::args().collect::<Vec<String>>();
+            let config_file = config_file.get(1).unwrap();
+            let command = format!("{} {} {}", port, config_file, model_file);
             let args = command.split(' ').map(|n| n.to_string());
-            let pid = Command::new(WORKER_BINARY)
-                .env("RUST_LOG", RUST_LOG)
+            let pid = Command::new(cfg.get_string("worker.binary")?)
+                .env("RUST_LOG", cfg.get_string("manager.logging")?)
                 .args(args)
                 .stdout(out_log)
                 .stderr(err_log)
@@ -134,7 +143,9 @@ impl Manager {
                         return Ok((pid, channel));
                     }
                     Err(_) => {
-                        if now.elapsed().as_millis() >= WORKER_TIMEOUT {
+                        if now.elapsed().as_millis()
+                            >= cfg.get_int("manager.worker_timeout")? as u128
+                        {
                             return Err(anyhow!("timeout connecting to new worker process"));
                         }
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -204,7 +215,7 @@ impl Manager {
     }
 
     /// Get the statuses of all workers
-    #[tracing::instrument]
+    // #[tracing::instrument]
     pub fn all_status(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         Ok(self
             .workers
@@ -213,6 +224,7 @@ impl Manager {
             .collect())
     }
 
+    // #[tracing::instrument]
     pub fn all_workers(&self) -> Result<HashMap<Handle, WorkerStatus>> {
         Ok(self
             .all_status()
@@ -223,7 +235,7 @@ impl Manager {
     }
 
     /// Return all the workers, without their status
-    #[tracing::instrument]
+    // #[tracing::instrument]
     pub fn workers(&self) -> Vec<PartialHandle> {
         self.workers
             .values()
@@ -235,6 +247,7 @@ impl Manager {
     }
 
     /// Get statistics of all workers
+    // #[tracing::instrument]
     pub async fn all_stats(&self) -> Result<HashMap<PartialHandle, u64>> {
         let mut map: HashMap<PartialHandle, u64> = HashMap::new();
 
@@ -254,7 +267,7 @@ impl Manager {
     }
 
     /// Start a new worker process on the local machine and connect to it
-    #[tracing::instrument]
+    //#[tracing::instrument]
     pub async fn start_new_workers(&mut self, n: u16) -> Result<()> {
         let mut stream = tokio_stream::iter(0..n);
         while let Some(_) = stream.next().await {
