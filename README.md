@@ -104,10 +104,7 @@ View the status of the workers
 
 ## Documentation
 
-Documentation is available at
-```
-https://mattnappo.github.io/docs/autodep
-```
+Documentation is available at [https://mattnappo.github.io/docs/autodep](https://mattnappo.github.io/docs/autodep)
 
 You can view the documentation locally after running `cargo doc`. Then, visit `target/doc/autodep/index.html`.
 
