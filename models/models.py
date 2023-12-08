@@ -56,9 +56,6 @@ def deeplabv3():
     plt.imshow(r)
     plt.savefig("x.png")
 
-
-
-
     mod = torch.jit.trace(model, input_batch, strict=False)
     mod.save("new_deeplab_v3.pt")
 
@@ -72,5 +69,5 @@ def faster_rcnn():
 
 #resnet18()
 #resnet50()
-deeplabv3()
+#deeplabv3()
 #faster_rcnn()
